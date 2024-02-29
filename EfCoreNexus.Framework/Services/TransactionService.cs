@@ -43,8 +43,5 @@ public class TransactionService<T> where T : DbContext
         await Transaction.DisposeAsync().ConfigureAwait(false);
 
         await CtxTransaction.DisposeAsync().ConfigureAwait(false);
-
-        Transaction = null;
-        CtxTransaction = null;
     }
 }

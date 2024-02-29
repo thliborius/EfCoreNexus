@@ -15,7 +15,11 @@ public class ProviderFactory<TContext>(DataAssemblyConfiguration configuration) 
                                                                    && !t.IsGenericTypeDefinition
                                                                    && typeof(IProvider).IsAssignableFrom(t)))
         {
-            lst.Add((IProvider)Activator.CreateInstance(type, transactionSvc));
+            var obj = Activator.CreateInstance(type, transactionSvc);
+            if (obj != null)
+            {
+                lst.Add((IProvider)obj);
+            }
         }
 
         return lst;
