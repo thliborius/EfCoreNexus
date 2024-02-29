@@ -15,6 +15,7 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
+[![Nuget][nuget-shield]][nuget-url]
 
 
 <!-- PROJECT LOGO -->
@@ -38,7 +39,7 @@ Additionally you can add a configuration for each entity.</p>
 
 
 <!-- GETTING STARTED -->
-## Usage
+## How to use
 
 <ul>
 		<li>Add a reference to the EfCoreNexus.Framework library or install the nuget package.</li>
@@ -67,8 +68,6 @@ Don't forget to give the project a star! Thanks again!
 5. Open a Pull Request
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- LICENSE -->
 ## License
@@ -102,3 +101,5 @@ Project Link: [https://github.com/thliborius/EfCoreNexus](https://github.com/thl
 [issues-url]: https://github.com/thliborius/EfCoreNexus/issues
 [license-shield]: https://img.shields.io/github/license/thliborius/EfCoreNexus.svg?style=for-the-badge
 [license-url]: https://github.com/thliborius/EfCoreNexus/blob/main/license.txt
+[nuget-shield]: https://img.shields.io/nuget/v/EfCoreNexus.Framework
+[nuget-url]: https://www.nuget.org/packages/EfCoreNexus.Framework/
