@@ -101,5 +101,5 @@ Project Link: [https://github.com/thliborius/EfCoreNexus](https://github.com/thl
 [issues-url]: https://github.com/thliborius/EfCoreNexus/issues
 [license-shield]: https://img.shields.io/github/license/thliborius/EfCoreNexus.svg?style=for-the-badge
 [license-url]: https://github.com/thliborius/EfCoreNexus/blob/main/license.txt
-[nuget-shield]: https://img.shields.io/nuget/v/EfCoreNexus.Framework
+[nuget-shield]: https://img.shields.io/nuget/v/EfCoreNexus.Framework?style=for-the-badge
 [nuget-url]: https://www.nuget.org/packages/EfCoreNexus.Framework/
