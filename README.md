@@ -18,7 +18,6 @@
 [![Nuget][nuget-shield]][nuget-url]
 
 
-<!-- PROJECT LOGO -->
 <br />
 <div align="center">
   <a href="https://github.com/thliborius/EfCoreNexus">
@@ -30,7 +29,6 @@
   Integrate the entity framework core into your blazor app with ease and less code.
 </div>
 
-<!-- ABOUT THE PROJECT -->
 ## About The Project
 
 <p><b>Tired of copy & pasting a lots of classes when creating a new table and connecting it to your blazor app? EfCoreNexus helps you integrating the entity framework core into your blazor app.</b></p>
@@ -38,8 +36,19 @@
 Additionally you can add a configuration for each entity.</p>
 
 
-<!-- GETTING STARTED -->
-## How to use
+## Run the sample app
+<ul>
+	<li>Check out the repo</li>
+	<li>Edit the EfCoreNexus.TestApp\EfCoreNexus.TestApp.Data\migrations_connectionstring.bat and adjust the connection string to an empty sql server database</li>
+	<li>Call migrations_add.bat with a migration name as parameter, e.g. "migrations_add.bat Init"</li>
+	<li>Call migrations_updatedb.bat</li>
+	<li>Add something to the table test that was created in the database, if you want to see something in the app</li>
+	<li>Open the solution and start the TestApp (just hit F5)</li>
+</ul>
+
+## How to use it in your project
+
+These are the steps that are neccessary to hook up the entity framework with EfCoreNexus.
 
 <ul>
 		<li>Add a reference to the EfCoreNexus.Framework library or install the nuget package.</li>
@@ -50,10 +59,11 @@ Additionally you can add a configuration for each entity.</p>
 		<li>To use ef core migrations use the batch files provided in the sample app. Don't forget to adjust the batch file that contains the connection string, used as environment variable.</li>
 </ul>
 
+For detailled information have a look at the sample app in this repo.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-<!-- CONTRIBUTING -->
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
@@ -69,19 +79,13 @@ Don't forget to give the project a star! Thanks again!
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-<!-- LICENSE -->
 ## License
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-<!-- CONTACT -->
-## Contact
-
-Thorsten Liborius - thorsten@liborius.com
+## Project
 
 Project Link: [https://github.com/thliborius/EfCoreNexus](https://github.com/thliborius/EfCoreNexus)
 
