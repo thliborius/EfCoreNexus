@@ -13,7 +13,7 @@ public interface IProviderCrud<TEntity, in TId, TContext> : IProvider
     // READ
     IList<TEntity> GetAll();
     Task<IList<TEntity>> GetAllAsync();
-    Task<TEntity> GetById(TId id);
+    Task<TEntity?> GetById(TId id);
 
     // UPDATE
     Task Update(TEntity item, TId id);

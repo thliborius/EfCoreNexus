@@ -84,7 +84,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
     }
 
-    public virtual async Task<TEntity> GetById(TId id)
+    public virtual async Task<TEntity?> GetById(TId id)
     {
         var ctx = await GetContextAsync().ConfigureAwait(false);
 

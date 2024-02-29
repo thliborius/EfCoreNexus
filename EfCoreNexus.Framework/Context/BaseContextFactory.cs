@@ -9,7 +9,7 @@ namespace EfCoreNexus.Framework.Context;
 /// </summary>
 public abstract class BaseContextFactory<TContext> : IDesignTimeDbContextFactory<TContext>, IDbContextFactory<TContext> where TContext : BaseContext<TContext>
 {
-    public DataAssemblyConfiguration AssemblyConfiguration { get; }
+    public DataAssemblyConfiguration AssemblyConfiguration { get; } = null!;
     protected readonly List<EntityTypeConfigurationDependency> EntityConfigurations = new();
     protected string? ConnectionString { get; set; }
 

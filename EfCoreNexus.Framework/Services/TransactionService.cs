@@ -14,8 +14,8 @@ public class TransactionService<T> where T : DbContext
     public T StandardContext { get; }
     public IDbContextFactory<T> CtxFactory { get; }
 
-    private IDbContextTransaction Transaction { get; set; }
-    public DbContext CtxTransaction { get; private set; }
+    private IDbContextTransaction Transaction { get; set; } = null!;
+    public DbContext CtxTransaction { get; private set; } = null!;
 
     public void BeginTransaction()
     {
