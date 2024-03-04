@@ -48,7 +48,7 @@ Additionally you can add a configuration for each entity.</p>
 
 ## How to use it in your project
 
-These are the steps that are neccessary to hook up the entity framework with EfCoreNexus.
+These are the steps that are neccessary to hook up the entity framework via EfCoreNexus with your blazor app.
 
 <ul>
 		<li>Add a reference to the EfCoreNexus.Framework library or install the nuget package.</li>
@@ -62,7 +62,7 @@ These are the steps that are neccessary to hook up the entity framework with EfC
 
 <br/>
 
-Now you are ready to go. Here is an example how to add an database entry and retrieve all of them:<br/>
+Now you are ready to go. Here is an example how to add a database entry and retrieve all of them:<br/>
 ```
 var p = MainSvc.GetProvider<TestProvider>();
 
