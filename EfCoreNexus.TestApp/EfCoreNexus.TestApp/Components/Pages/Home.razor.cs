@@ -16,6 +16,16 @@ public class HomeComponent : ComponentBase
     protected override async Task OnInitializedAsync()
     {
         var p = MainSvc.GetProvider<TestProvider>();
+
+        var newEntity = new Test
+        {
+            TestId = Guid.NewGuid(),
+            CurrentDate = DateTime.Now,
+            Content = $"Testapp entry from {DateTime.Now:F}",
+            Active = true
+        };
+        await p.Create(newEntity, newEntity.TestId);
+
         TestList = await p.GetAllAsync();
     }
 }

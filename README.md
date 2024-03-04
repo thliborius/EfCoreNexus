@@ -32,7 +32,7 @@
 ## About The Project
 
 <p><b>Tired of copy & pasting a lots of classes when creating a new table and connecting it to your blazor app? EfCoreNexus helps you integrating the entity framework core into your blazor app.</b></p>
-<p>After it had been set up, it is really easy to add new table to your app. Now you only have to add to classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones.<br />
+<p>With reflection the entity, the provider and the optional configuration classes getting registered.<br />After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones.<br />
 Additionally you can add a configuration for each entity.</p>
 
 
@@ -54,10 +54,30 @@ These are the steps that are neccessary to hook up the entity framework with EfC
 		<li>Add a reference to the EfCoreNexus.Framework library or install the nuget package.</li>
 		<li>Create a data project for your app.</li>
 		<li>Add a DbContext and DbContextFactory class, derived from EfCoreNexus base classes BaseContext and BaseContextFactory.</li>
-		<li>Add at least one entity implementing the IEntity interface and a corresponding provider class derived from ProviderBase.</li>
+		<li>Your entity classes must implement the IEntity interface to get instatiated via reflection. Otherwise they are the same as before.</li>
+		<li>For each entity you need a provider class that must be derived from ProviderBase. The base class will supply you with all the standard CRUD operations (GetAll, GetById, Create, Update, Delete).</li>
 		<li>Add a few lines to your startup/program-class to register the context classes in the di container.</li>
 		<li>To use ef core migrations use the batch files provided in the sample app. Don't forget to adjust the batch file that contains the connection string, used as environment variable.</li>
 </ul>
+
+<br/>
+
+Now you are ready to go. Here is an example how to add an database entry and retrieve all of them:<br/>
+```
+var p = MainSvc.GetProvider<TestProvider>();
+
+var newEntity = new Test
+{
+    TestId = Guid.NewGuid(),
+    CurrentDate = DateTime.Now,
+    Content = $"Testapp entry from {DateTime.Now:F}",
+    Active = true
+};
+await p.Create(newEntity, newEntity.TestId);
+
+TestList = await p.GetAllAsync();
+```
+<br/>
 
 For detailled information have a look at the sample app in this repo.
 

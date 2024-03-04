@@ -19,4 +19,8 @@
     <ProjectReference Include="..\..\EfCoreNexus.Framework\EfCoreNexus.Framework.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Configurations\" />
+  </ItemGroup>
+
 </Project>
