@@ -1,7 +1,3 @@
-<!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
-<a name="readme-top"></a>
-
-
 <!-- PROJECT SHIELDS -->
 <!--
 *** I'm using markdown "reference style" links for readability.
@@ -17,17 +13,16 @@
 [![MIT License][license-shield]][license-url]
 [![Nuget][nuget-shield]][nuget-url]
 
+# EfCoreNexus
 
-<br />
 <div align="center">
   <a href="https://github.com/thliborius/EfCoreNexus">
     <img src="logo.png" alt="Logo" width="120" height="120">
   </a>
-
-  <h3 align="center">EfCoreNexus</h3>
-
-  Integrate the entity framework core into your blazor app with ease and less code.
 </div>
+
+Integrate the entity framework core into your blazor app with ease and less code.
+
 
 ## About The Project
 
@@ -175,8 +170,6 @@ Don't forget to give the project a star! Thanks again!
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## License
 
