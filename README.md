@@ -31,38 +31,121 @@
 
 ## About The Project
 
-<p><b>Tired of copy & pasting a lots of classes when creating a new table and connecting it to your blazor app? EfCoreNexus helps you integrating the entity framework core into your blazor app.</b></p>
-<p>With reflection the entity, the provider and the optional configuration classes getting registered.<br />After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones.<br />
-Additionally you can add a configuration for each entity.</p>
+**Tired of copy & pasting a lots of classes when creating a new table and connecting it to your blazor app? EfCoreNexus helps you integrating the entity framework core into your blazor app.**
+With reflection the entity, the provider and the optional configuration classes getting registered.<br />After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones. Additionally you can add a configuration for each entity.
 
 
 ## Run the sample app
-<ul>
-	<li>Check out the repo</li>
-	<li>Edit the EfCoreNexus.TestApp\EfCoreNexus.TestApp.Data\migrations_connectionstring.bat and adjust the connection string to an empty sql server database</li>
-	<li>Call migrations_add.bat with a migration name as parameter, e.g. "migrations_add.bat Init"</li>
-	<li>Call migrations_updatedb.bat</li>
-	<li>Add something to the table test that was created in the database, if you want to see something in the app</li>
-	<li>Open the solution and start the TestApp (just hit F5)</li>
-</ul>
+
+- Check out the repo.
+- Edit the EfCoreNexus.TestApp\EfCoreNexus.TestApp.Data\migrations_connectionstring.bat and adjust the connection string to an empty sql server database.
+- Call migrations_add.bat with a migration name as parameter, e.g. "migrations_add.bat Init".
+- Call migrations_updatedb.bat.
+- Add something to the table test that was created in the database, if you want to see something in the app.
+- Open the solution and start the TestApp (just hit F5).
 
 ## How to use it in your project
 
 These are the steps that are neccessary to hook up the entity framework via EfCoreNexus with your blazor app.
 
-<ul>
-		<li>Add a reference to the EfCoreNexus.Framework library or install the nuget package.</li>
-		<li>Create a data project for your app.</li>
-		<li>Add a DbContext and DbContextFactory class, derived from EfCoreNexus base classes BaseContext and BaseContextFactory.</li>
-		<li>Your entity classes must implement the IEntity interface to get instatiated via reflection. Otherwise they are the same as before.</li>
-		<li>For each entity you need a provider class that must be derived from ProviderBase. The base class will supply you with all the standard CRUD operations (GetAll, GetById, Create, Update, Delete).</li>
-		<li>Add a few lines to your startup/program-class to register the context classes in the di container.</li>
-		<li>To use ef core migrations use the batch files provided in the sample app. Don't forget to adjust the batch file that contains the connection string, used as environment variable.</li>
-</ul>
+ - Add a reference to the EfCoreNexus.Framework library or install the nuget package.
 
-<br/>
+- Add a DbContext and DbContextFactory class, derived from EfCoreNexus base classes BaseContext and BaseContextFactory.
+```
+public class MainContext : BaseContext<MainContext>
+{
+    public MainContext(DbContextOptions<MainContext> options, IEnumerable<EntityTypeConfigurationDependency> configurations) 
+    : base(options, configurations)
+    {    
+    }
+}
+```
+```
+public class MainContextFactory : BaseContextFactory<MainContext>
+{
+    public MainContextFactory()
+    {    
+    }
 
-Now you are ready to go. Here is an example how to add a database entry and retrieve all of them:<br/>
+    public MainContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString)
+        : base(assemblyConf, connectionString)
+    {
+    }
+
+    public override MainContext CreateDbContext()
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
+        optionsBuilder.UseSqlServer(ConnectionString);
+
+        return new MainContext(optionsBuilder.Options, EntityConfigurations);
+    }
+}
+```
+- Create your entity classes. They must implement the IEntity interface to get instatiated via reflection. 
+```
+public class Test : IEntity
+{
+    [Key]
+    public Guid TestId { get; set; }
+
+    public bool Active { get; set; }
+}
+```
+
+- For each entity you need a provider class that must be derived from ProviderBase. The base class will supply you with all the standard CRUD operations (GetAll, GetById, Create, Update, Delete). If you'd like to use special queries you can implement your own queries according to the GetActiveQuery method.
+
+```
+public class TestProvider : ProviderBase<Test, Guid, MainContext>
+{
+    public TestProvider(TransactionService<MainContext> transactionSvc) : base(transactionSvc)
+    {
+    }
+
+    protected override IQueryable<Test> GetActiveQuery(DbContext ctx, bool isActive)
+    {
+        return base.GetAllQuery(ctx).Where(x => x.Active == isActive);
+    }
+}
+```
+
+- Add a few lines to your startup/program-class to register the context classes in the di container.
+```
+public static void Main(string[] args)
+{
+	var builder = WebApplication.CreateBuilder(args);
+	ConfigureDataservice(builder.Services);
+	...
+}
+
+private static void ConfigureDataservice(IServiceCollection services)
+{
+	var connectionString = "...";
+	var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
+	optionsBuilder.UseSqlServer(connectionString);
+            
+	var assemblyConf = new DataAssemblyConfiguration("Yournamespace.Data");
+	var ctxFactory = new MainContextFactory(assemblyConf, connectionString);
+	var startupConf = new StartupConfiguration<MainContext>(ctxFactory, optionsBuilder);
+
+	startupConf.ConfigureDataservice(services);
+}
+```
+
+- Optional: to configure the entities separately from the entity class you can add configuration classes. They are also automatically instantiated if they derive from EntityTypeConfigurationDependency. 
+
+```
+internal class TestConfiguration : EntityTypeConfigurationDependency<Test>
+{
+    public override void Configure(EntityTypeBuilder<Test> builder)
+    {
+		builder.HasKey(x => x.TestId);  // already defined as attribute in entity class, for demonstration purpose
+    }
+}
+```
+
+- To use ef core migrations use the batch files provided in the sample app. Don't forget to adjust the batch file that contains the connection string, used as environment variable.
+
+Now you are ready to go. Here is an example how to add a database entry and retrieve all of them:
 ```
 var p = MainSvc.GetProvider<TestProvider>();
 
@@ -77,12 +160,8 @@ await p.Create(newEntity, newEntity.TestId);
 
 TestList = await p.GetAllAsync();
 ```
-<br/>
 
 For detailled information have a look at the sample app in this repo.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 ## Contributing
 
@@ -103,15 +182,9 @@ Don't forget to give the project a star! Thanks again!
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ## Project
 
 Project Link: [https://github.com/thliborius/EfCoreNexus](https://github.com/thliborius/EfCoreNexus)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
@@ -127,3 +200,4 @@ Project Link: [https://github.com/thliborius/EfCoreNexus](https://github.com/thl
 [license-url]: https://github.com/thliborius/EfCoreNexus/blob/main/license.txt
 [nuget-shield]: https://img.shields.io/nuget/v/EfCoreNexus.Framework?style=for-the-badge
 [nuget-url]: https://www.nuget.org/packages/EfCoreNexus.Framework/
+

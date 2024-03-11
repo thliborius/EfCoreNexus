@@ -11,12 +11,16 @@ Tired of copy &amp; pasting a lots of classes when creating a new table and conn
 After it had been set up, it is really easy to add new table to your app. Now you only have to add to classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones.
 Additionally you can add a configuration for each entity.</Description>
     <PackageIcon>logo.png</PackageIcon>
-    <PackageReadmeFile>README_nuget.md</PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/thliborius/EfCoreNexus/</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageLicenseFile>license.txt</PackageLicenseFile>
-    <Version>1.0.1</Version>	
+    <Version>1.0.2</Version>
+    <Copyright>Thorsten Liborius</Copyright>
+    <PackageTags>Entity Framework Core;Blazor</PackageTags>
+    <PackageReleaseNotes>Documentation update
+BaseContextFactory: moved Connectionstring assignment to base class</PackageReleaseNotes>	
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,7 +32,7 @@ Additionally you can add a configuration for each entity.</Description>
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
-    <None Include="..\README_nuget.md">
+    <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

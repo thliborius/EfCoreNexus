@@ -21,7 +21,7 @@ public class HomeComponent : ComponentBase
         {
             TestId = Guid.NewGuid(),
             CurrentDate = DateTime.Now,
-            Content = $"Testapp entry from {DateTime.Now:F}",
+            Content = $"TestApp entry {DateTime.Now:F}",
             Active = true
         };
         await p.Create(newEntity, newEntity.TestId);

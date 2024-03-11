@@ -22,8 +22,10 @@ public abstract class BaseContextFactory<TContext> : IDesignTimeDbContextFactory
         }
     }
 
-    protected BaseContextFactory(DataAssemblyConfiguration assemblyConf)
+    protected BaseContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString)
     {
+        ConnectionString = connectionString;
+
         AssemblyConfiguration = assemblyConf;
         EntityConfigurations = new List<EntityTypeConfigurationDependency>();
         foreach (var type in assemblyConf.AssemblyData.DefinedTypes.Where(t => !t.IsAbstract && !t.IsGenericTypeDefinition && typeof(EntityTypeConfigurationDependency).IsAssignableFrom(t)))

@@ -13,9 +13,9 @@ public class MainContextFactory : BaseContextFactory<MainContext>
     {
     }
 
-    public MainContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString) : base(assemblyConf)
+    public MainContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString)
+        : base(assemblyConf, connectionString)
     {
-        ConnectionString = connectionString;
     }
 
     public override MainContext CreateDbContext()

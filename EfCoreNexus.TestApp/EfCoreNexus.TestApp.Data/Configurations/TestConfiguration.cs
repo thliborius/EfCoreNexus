@@ -9,6 +9,6 @@ internal class TestConfiguration : EntityTypeConfigurationDependency<Test>
 {
     public override void Configure(EntityTypeBuilder<Test> builder)
     {
-        builder.HasKey(x => x.TestId);
+        builder.HasKey(x => x.TestId);  // already defined as attribute in entity class, for demonstration purpose
     }
 }
