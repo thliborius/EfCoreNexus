@@ -41,7 +41,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
         finally
         {
-            if (TransactionSvc.CtxTransaction == null)
+            if (TransactionSvc is { CtxTransaction: null })
             {
                 await ctx.DisposeAsync().ConfigureAwait(false);
             }
@@ -59,7 +59,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
         finally
         {
-            if (TransactionSvc.CtxTransaction == null)
+            if (TransactionSvc is { CtxTransaction: null })
             {
                 ctx.Dispose();
             }
@@ -77,7 +77,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
         finally
         {
-            if (TransactionSvc.CtxTransaction == null)
+            if (TransactionSvc is { CtxTransaction: null })
             {
                 await ctx.DisposeAsync().ConfigureAwait(false);
             }
@@ -98,7 +98,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
         finally
         {
-            if (TransactionSvc.CtxTransaction == null)
+            if (TransactionSvc is { CtxTransaction: null })
             {
                 await ctx.DisposeAsync().ConfigureAwait(false);
             }
@@ -124,7 +124,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
         finally
         {
-            if (TransactionSvc.CtxTransaction == null)
+            if (TransactionSvc is { CtxTransaction: null })
             {
                 await ctx.DisposeAsync().ConfigureAwait(false);
             }
@@ -157,7 +157,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         }
         finally
         {
-            if (TransactionSvc.CtxTransaction == null)
+            if (TransactionSvc is { CtxTransaction: null })
             {
                 await ctx.DisposeAsync().ConfigureAwait(false);
             }

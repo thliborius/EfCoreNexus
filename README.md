@@ -88,7 +88,7 @@ public class Test : IEntity
 }
 ```
 
-- For each entity you need a provider class that must be derived from ProviderBase. The base class will supply you with all the standard CRUD operations (GetAll, GetById, Create, Update, Delete). If you'd like to use special queries you can implement your own queries according to the GetActiveQuery method.
+- For each entity you need a provider class that must be derived from ProviderBase. The base class will supply you with all the standard CRUD operations (GetAll, GetById, Create, Update, Delete). If you'd like to use special queries you can implement your own queries like the GetActiveOrderedByDate method in the example.
 
 ```
 public class TestProvider : ProviderBase<Test, Guid, MainContext>
@@ -97,9 +97,50 @@ public class TestProvider : ProviderBase<Test, Guid, MainContext>
     {
     }
 
-    protected override IQueryable<Test> GetActiveQuery(DbContext ctx, bool isActive)
+    public async Task<IList<Test>> GetActiveOrderedByDate()
     {
-        return base.GetAllQuery(ctx).Where(x => x.Active == isActive);
+        var ctx = await GetContextAsync().ConfigureAwait(false);
+
+        try
+        {
+            var items = GetAllQuery(ctx);
+            return await items.Where(x => x.Active == true).OrderBy(x => x.CurrentDate).ToListAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            if (TransactionSvc is { CtxTransaction: null })
+            {
+                await ctx.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+}
+```
+If you have multiple sql statements you can run them in a transaction:
+```
+public async Task DeactivateAndCreate(Test newEntity)
+{
+    try
+    {
+        TransactionSvc.BeginTransaction();
+
+        var ctx = await GetContextAsync().ConfigureAwait(false);
+        var itemsToDeactivate = GetDbSet(ctx).Where(x => x.Active == true);
+        foreach (var item in itemsToDeactivate)
+        {
+            item.Active = false;
+        }
+        ctx.Set<Test>().UpdateRange(itemsToDeactivate);
+
+        GetDbSet(ctx).Add(newEntity);
+
+        await ctx.SaveChangesAsync().ConfigureAwait(false);
+
+        await TransactionSvc.CommitTransaction().ConfigureAwait(false);
+    }
+    finally
+    {
+        await TransactionSvc.DisposeTransaction().ConfigureAwait(false);
     }
 }
 ```
@@ -149,14 +190,13 @@ var newEntity = new Test
 {
     TestId = Guid.NewGuid(),
     CurrentDate = DateTime.Now,
-    Content = $"Testapp entry from {DateTime.Now:F}",
+    Content = $"Testapp entry {DateTime.Now:F}",
     Active = true
 };
 await p.Create(newEntity, newEntity.TestId);
 
 TestList = await p.GetAllAsync();
 ```
-
 For detailled information have a look at the sample app in this repo.
 
 ## Contributing

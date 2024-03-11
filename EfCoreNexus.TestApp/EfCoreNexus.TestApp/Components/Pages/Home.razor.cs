@@ -24,8 +24,13 @@ public class HomeComponent : ComponentBase
             Content = $"TestApp entry {DateTime.Now:F}",
             Active = true
         };
+
         await p.Create(newEntity, newEntity.TestId);
 
-        TestList = await p.GetAllAsync();
+        // example for using a transaction
+        newEntity.TestId = Guid.NewGuid();
+        await p.DeactivateAndCreate(newEntity);
+
+        TestList = await p.GetActiveOrderedByDate();
     }
 }
