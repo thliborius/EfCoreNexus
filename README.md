@@ -27,7 +27,8 @@ Integrate the entity framework core into your blazor app with ease and less code
 ## About The Project
 
 **Tired of copy & pasting a lots of classes when creating a new table and connecting it to your blazor app? EfCoreNexus helps you integrating the entity framework core into your blazor app.**
-With reflection the entity, the provider and the optional configuration classes getting registered.<br />After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones. Additionally you can add a configuration for each entity.
+
+With the help of reflection, the entity, the provider and the optional configuration classes getting registered. After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones. Additionally you can add a configuration for each entity.
 
 
 ## Run the sample app
