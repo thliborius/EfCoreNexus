@@ -56,10 +56,7 @@ public class DataService<TContext> : IDataService<TContext> where TContext : DbC
 
     public void BeginTransaction()
     {
-        if (TransactionSvc != null)
-        {
-            TransactionSvc.BeginTransaction();
-        }
+        TransactionSvc?.BeginTransaction();
     }
 
     public async Task CommitTransaction()

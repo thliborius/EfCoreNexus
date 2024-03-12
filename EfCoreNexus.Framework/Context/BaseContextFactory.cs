@@ -43,8 +43,6 @@ public abstract class BaseContextFactory<TContext> : IDesignTimeDbContextFactory
         return CreateDbContext();
     }
 
-    public virtual TContext CreateDbContext()
-    {
-        throw new NotImplementedException();
-    }
+    public abstract TContext CreateDbContext();
+
 }

@@ -11,9 +11,7 @@ public class ProviderFactory<TContext>(DataAssemblyConfiguration configuration) 
     {
         var lst = new List<IProvider>();
 
-        foreach (var type in configuration.AssemblyData.DefinedTypes.Where(t => !t.IsAbstract
-                                                                   && !t.IsGenericTypeDefinition
-                                                                   && typeof(IProvider).IsAssignableFrom(t)))
+        foreach (var type in configuration.AssemblyData.DefinedTypes.Where(t => !t.IsAbstract && !t.IsGenericTypeDefinition && typeof(IProvider).IsAssignableFrom(t)))
         {
             var obj = Activator.CreateInstance(type, transactionSvc);
             if (obj != null)

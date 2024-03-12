@@ -20,9 +20,7 @@ public class StartupConfiguration<TContext>(BaseContextFactory<TContext> dbFacto
 
         // Add configurations for DbContext to services
         foreach (var type in dbFactory.AssemblyConfiguration.AssemblyData.DefinedTypes
-                     .Where(t => !t.IsAbstract
-                                 && !t.IsGenericTypeDefinition
-                                 && typeof(EntityTypeConfigurationDependency).IsAssignableFrom(t)))
+                     .Where(t => !t.IsAbstract && !t.IsGenericTypeDefinition && typeof(EntityTypeConfigurationDependency).IsAssignableFrom(t)))
         {
             services.AddSingleton(typeof(EntityTypeConfigurationDependency), type);
         }
