@@ -182,6 +182,12 @@ internal class TestConfiguration : EntityTypeConfigurationDependency<Test>
 
 - To use ef core migrations use the batch files provided in the sample app. Don't forget to adjust the batch file that contains the connection string, used as environment variable.
 
+- The dataservice MainSvc is injected into the IoC container at startup. Access it in your pages via the inject attribute.
+```
+    [Inject]
+    protected DataService<MainContext> MainSvc { get; set; } = default!;
+```
+
 Now you are ready to go. Here is an example how to add a database entry and retrieve all of them:
 ```
 var p = MainSvc.GetProvider<TestProvider>();
