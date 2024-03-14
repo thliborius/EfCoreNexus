@@ -19,8 +19,7 @@ Additionally you can add a configuration for each entity.</Description>
     <Version>1.0.4</Version>
     <Copyright>Thorsten Liborius</Copyright>
     <PackageTags>Entity Framework Core;Blazor</PackageTags>
-    <PackageReleaseNotes>Fixed transaction handling
-Added transaction example and documentation</PackageReleaseNotes>	
+    <PackageReleaseNotes>Documentation update</PackageReleaseNotes>	
   </PropertyGroup>
 
   <ItemGroup>
