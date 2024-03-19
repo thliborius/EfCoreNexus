@@ -1,11 +1,9 @@
 ﻿using EfCoreNexus.Framework.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreNexus.Framework.Provider;
 
-public interface IProviderCrud<TEntity, in TId, TContext> : IProvider
+public interface IProviderCrud<TEntity, in TId> : IProvider
     where TEntity : IEntity
-    where TContext : DbContext
 {
     // CREATE
     Task Create(TEntity item, TId id);

@@ -39,13 +39,13 @@ public class DataService<TContext> : IDataService<TContext> where TContext : DbC
         throw new ArgumentException($"No repository found for provider {typeof(TProviderBase)}");
     }
 
-    public IProviderCrud<TEntity, TId, TContext> GetProviderCrud<TEntity, TId>()
+    public IProviderCrud<TEntity, TId> GetProviderCrud<TEntity, TId>()
         where TEntity : IEntity
         where TId : struct
     {
         foreach (var p in _provider)
         {
-            if (p is IProviderCrud<TEntity, TId, TContext> typedProvider)
+            if (p is IProviderCrud<TEntity, TId> typedProvider)
             {
                 return typedProvider;
             }

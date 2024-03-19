@@ -10,7 +10,7 @@ public interface IDataService<TContext> where TContext : DbContext
 
     TProviderBase GetProvider<TProviderBase>() where TProviderBase : IProvider;
 
-    IProviderCrud<TEntity, TId, TContext> GetProviderCrud<TEntity, TId>()
+    IProviderCrud<TEntity, TId> GetProviderCrud<TEntity, TId>()
         where TEntity : IEntity
         where TId : struct;
 

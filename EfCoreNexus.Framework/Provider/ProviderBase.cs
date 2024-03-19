@@ -6,7 +6,7 @@ using System.Linq.Dynamic.Core;
 
 namespace EfCoreNexus.Framework.Provider;
 
-public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEntity, TId, TContext>
+public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEntity, TId>
     where TEntity : class, IEntity
     where TContext : DbContext
 {
