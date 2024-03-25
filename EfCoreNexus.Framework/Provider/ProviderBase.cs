@@ -6,16 +6,11 @@ using System.Linq.Dynamic.Core;
 
 namespace EfCoreNexus.Framework.Provider;
 
-public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEntity, TId>
+public abstract class ProviderBase<TEntity, TId, TContext>(TransactionService<TContext> transactionSvc) : IProviderCrud<TEntity, TId>
     where TEntity : class, IEntity
     where TContext : DbContext
 {
-    protected readonly TransactionService<TContext> TransactionSvc;
-
-    protected ProviderBase(TransactionService<TContext> transactionSvc)
-    {
-        TransactionSvc = transactionSvc;
-    }
+    protected readonly TransactionService<TContext> TransactionSvc = transactionSvc;
 
     public virtual async Task Delete(TId id)
     {

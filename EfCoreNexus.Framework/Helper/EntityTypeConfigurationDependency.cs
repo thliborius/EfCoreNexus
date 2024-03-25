@@ -8,8 +8,7 @@ public abstract class EntityTypeConfigurationDependency
     public abstract void Configure(ModelBuilder modelBuilder);
 }
 
-public abstract class EntityTypeConfigurationDependency<TEntity>
-    : EntityTypeConfigurationDependency, IEntityTypeConfiguration<TEntity>
+public abstract class EntityTypeConfigurationDependency<TEntity> : EntityTypeConfigurationDependency, IEntityTypeConfiguration<TEntity>
     where TEntity : class
 {
     public abstract void Configure(EntityTypeBuilder<TEntity> builder);

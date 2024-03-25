@@ -6,12 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreNexus.TestApp.Data.Provider;
 
-public class TestProvider : ProviderBase<Test, Guid, MainContext>
+public class TestProvider(TransactionService<MainContext> transactionSvc) : ProviderBase<Test, Guid, MainContext>(transactionSvc)
 {
-    public TestProvider(TransactionService<MainContext> transactionSvc) : base(transactionSvc)
-    {
-    }
-
     /// <summary>
     /// How to write your own query
     /// </summary>
