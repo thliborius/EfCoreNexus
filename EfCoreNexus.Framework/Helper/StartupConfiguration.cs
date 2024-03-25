@@ -15,7 +15,6 @@ public class StartupConfiguration<TContext>(BaseContextFactory<TContext> dbFacto
         services.AddScoped(x => (IDbContextFactory<TContext>)dbFactory);
         services.AddScoped(x => dbFactory.AssemblyConfiguration);
         services.AddScoped<IProviderFactory<TContext>, ProviderFactory<TContext>>();
-        services.AddScoped<TContext>();
         services.AddScoped<DataService<TContext>>();
 
         // Add configurations for DbContext to services

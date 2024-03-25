@@ -58,18 +58,18 @@ public class MainContextFactory : BaseContextFactory<MainContext>
 {
     public MainContextFactory()
     {    
-		// only necessary when you want to use migrations, see implementation in project
+        // only necessary when you want to use migrations, see implementation in project
     }
 
-	public MainContextFactory(DataAssemblyConfiguration assemblyConf, DbContextOptionsBuilder<MainContext> optionsBuilder)
-		: base(assemblyConf, optionsBuilder)
-	{
-	}
+    public MainContextFactory(DataAssemblyConfiguration assemblyConf, DbContextOptionsBuilder<MainContext> optionsBuilder)
+        : base(assemblyConf, optionsBuilder)    
+    {
+    }
 
-	public override MainContext CreateDbContext()
-	{
-		return new MainContext(OptionsBuilder.Options, EntityConfigurations);
-	}
+    public override MainContext CreateDbContext()
+    {
+        return new MainContext(OptionsBuilder.Options, EntityConfigurations);
+    }
 }
 ```
 - Create your entity classes. They must implement the IEntity interface to get instatiated via reflection. 
@@ -141,22 +141,22 @@ public async Task DeactivateAndCreate(Test newEntity)
 ```
 public static void Main(string[] args)
 {
-	var builder = WebApplication.CreateBuilder(args);
-	ConfigureDataservice(builder.Services);
-	...
+    var builder = WebApplication.CreateBuilder(args);
+    ConfigureDataservice(builder.Services);
+    ...
 }
 
 private static void ConfigureDataservice(IServiceCollection services)
 {
-	var connectionString = "...";
-	var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
-	optionsBuilder.UseSqlServer(connectionString);
-            
-	var assemblyConf = new DataAssemblyConfiguration("Yournamespace.Data");
-	var ctxFactory = new MainContextFactory(assemblyConf, connectionString);
-	var startupConf = new StartupConfiguration<MainContext>(ctxFactory, optionsBuilder);
+    var connectionString = "...";
+    var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
+    optionsBuilder.UseSqlServer(connectionString);
 
-	startupConf.ConfigureDataservice(services);
+    var assemblyConf = new DataAssemblyConfiguration("Yournamespace.Data");
+    var ctxFactory = new MainContextFactory(assemblyConf, connectionString);
+    var startupConf = new StartupConfiguration<MainContext>(ctxFactory, optionsBuilder);
+
+    startupConf.ConfigureDataservice(services);
 }
 ```
 
@@ -167,7 +167,7 @@ internal class TestConfiguration : EntityTypeConfigurationDependency<Test>
 {
     public override void Configure(EntityTypeBuilder<Test> builder)
     {
-		builder.HasKey(x => x.TestId);  // already defined as attribute in entity class, for demonstration purpose
+        builder.HasKey(x => x.TestId);  // already defined as attribute in entity class, for demonstration purpose
     }
 }
 ```

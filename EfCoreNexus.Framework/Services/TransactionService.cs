@@ -3,10 +3,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace EfCoreNexus.Framework.Services;
 
-public class TransactionService<T>(T stdContext, IDbContextFactory<T> ctxFactory)
+public class TransactionService<T>(IDbContextFactory<T> ctxFactory)
     where T : DbContext
 {
-    public T StandardContext { get; } = stdContext;
     public IDbContextFactory<T> CtxFactory { get; } = ctxFactory;
     private IDbContextTransaction? Transaction { get; set; }
     public DbContext CtxTransaction { get; private set; } = null!;

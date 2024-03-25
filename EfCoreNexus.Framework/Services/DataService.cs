@@ -8,14 +8,10 @@ public class DataService<TContext> : IDataService<TContext> where TContext : DbC
 {
     private readonly List<IProvider> _provider = new();
 
-    public DataService(TContext context, IDbContextFactory<TContext> ctxFactory, IProviderFactory<TContext> providerFactory)
+    public DataService(IDbContextFactory<TContext> ctxFactory, IProviderFactory<TContext> providerFactory)
     {
         CtxFactory = ctxFactory;
-        // context can be null for unit testing
-        if (context != null)
-        {
-            TransactionSvc = new TransactionService<TContext>(context, CtxFactory);
-        }
+        TransactionSvc = new TransactionService<TContext>(CtxFactory);
 
         if (TransactionSvc != null)
         {
@@ -73,10 +69,5 @@ public class DataService<TContext> : IDataService<TContext> where TContext : DbC
         {
             await TransactionSvc.DisposeTransaction().ConfigureAwait(false);
         }
-    }
-
-    public void Reset()
-    {
-        TransactionSvc?.StandardContext.ChangeTracker.Entries().ToList().ForEach(e => e.State = EntityState.Detached);
     }
 }
