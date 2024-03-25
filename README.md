@@ -58,20 +58,18 @@ public class MainContextFactory : BaseContextFactory<MainContext>
 {
     public MainContextFactory()
     {    
+		// only necessary when you want to use migrations, see implementation in project
     }
 
-    public MainContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString)
-        : base(assemblyConf, connectionString)
-    {
-    }
+	public MainContextFactory(DataAssemblyConfiguration assemblyConf, DbContextOptionsBuilder<MainContext> optionsBuilder)
+		: base(assemblyConf, optionsBuilder)
+	{
+	}
 
-    public override MainContext CreateDbContext()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
-        optionsBuilder.UseSqlServer(ConnectionString);
-
-        return new MainContext(optionsBuilder.Options, EntityConfigurations);
-    }
+	public override MainContext CreateDbContext()
+	{
+		return new MainContext(OptionsBuilder.Options, EntityConfigurations);
+	}
 }
 ```
 - Create your entity classes. They must implement the IEntity interface to get instatiated via reflection. 
