@@ -2,6 +2,7 @@ using EfCoreNexus.Framework.Helper;
 using EfCoreNexus.TestApp.Components;
 using EfCoreNexus.TestApp.Data.Context;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace EfCoreNexus.TestApp
 {
@@ -50,9 +51,11 @@ namespace EfCoreNexus.TestApp
 
             var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
             optionsBuilder.UseSqlServer(connectionString);
+            optionsBuilder.ConfigureWarnings(w => w.Ignore(SqlServerEventId.SavepointsDisabledBecauseOfMARS));
+            optionsBuilder.UseSqlServer(opt => opt.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
             var assemblyConf = new DataAssemblyConfiguration("EfCoreNexus.TestApp.Data");
-            var ctxFactory = new MainContextFactory(assemblyConf, connectionString);
+            var ctxFactory = new MainContextFactory(assemblyConf, optionsBuilder);
             var startupConf = new StartupConfiguration<MainContext>(ctxFactory, optionsBuilder);
 
             startupConf.ConfigureDataservice(services);

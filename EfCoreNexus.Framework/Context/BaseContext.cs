@@ -15,9 +15,12 @@ public abstract class BaseContext<TContext>(DbContextOptions<TContext> options, 
         base.OnModelCreating(modelBuilder);
 
         // Register configurations of all entities in the modelBuilder
-        foreach (var entityTypeConfiguration in configurations)
+        if (configurations != null)
         {
-            entityTypeConfiguration.Configure(modelBuilder);
+            foreach (var entityTypeConfiguration in configurations)
+            {
+                entityTypeConfiguration.Configure(modelBuilder);
+            }
         }
 
         // Register all entities of the type IEntity in the modelbuilder

@@ -9,20 +9,29 @@ namespace EfCoreNexus.TestApp.Data.Context;
 /// </summary>
 public class MainContextFactory : BaseContextFactory<MainContext>
 {
+    /// <summary>
+    /// Parameterless constructor called by migrations tool
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Environment variable with Connection string was not set</exception>
     public MainContextFactory()
     {
+        var connectionString = Environment.GetEnvironmentVariable("EFCORETOOLSDB");
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            throw new InvalidOperationException("The connection string was not set in the 'EFCORETOOLSDB' environment variable.");
+        }
+
+        OptionsBuilder = new DbContextOptionsBuilder<MainContext>();
+        OptionsBuilder.UseSqlServer(connectionString);
     }
 
-    public MainContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString)
-        : base(assemblyConf, connectionString)
+    public MainContextFactory(DataAssemblyConfiguration assemblyConf, DbContextOptionsBuilder<MainContext> optionsBuilder)
+        : base(assemblyConf, optionsBuilder)
     {
     }
 
     public override MainContext CreateDbContext()
     {
-        var optionsBuilder = new DbContextOptionsBuilder<MainContext>();
-        optionsBuilder.UseSqlServer(ConnectionString);
-
-        return new MainContext(optionsBuilder.Options, EntityConfigurations);
+        return new MainContext(OptionsBuilder.Options, EntityConfigurations);
     }
 }

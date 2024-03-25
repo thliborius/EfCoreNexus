@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EfCoreNexus.Framework", "Ef
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EfCoreNexus.TestApp.Data", "EfCoreNexus.TestApp\EfCoreNexus.TestApp.Data\EfCoreNexus.TestApp.Data.csproj", "{AB3F1000-EDA5-4847-B526-14453C69E70D}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EfCoreNexus.TestApp.Data.Tests", "EfCoreNexus.TestApp\EfCoreNexus.TestApp.Data.Tests\EfCoreNexus.TestApp.Data.Tests.csproj", "{7E57D8FB-95C6-4219-B24C-D463E799C641}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{AB3F1000-EDA5-4847-B526-14453C69E70D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB3F1000-EDA5-4847-B526-14453C69E70D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB3F1000-EDA5-4847-B526-14453C69E70D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E57D8FB-95C6-4219-B24C-D463E799C641}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E57D8FB-95C6-4219-B24C-D463E799C641}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E57D8FB-95C6-4219-B24C-D463E799C641}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E57D8FB-95C6-4219-B24C-D463E799C641}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

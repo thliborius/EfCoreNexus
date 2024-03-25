@@ -9,22 +9,20 @@ namespace EfCoreNexus.Framework.Context;
 /// </summary>
 public abstract class BaseContextFactory<TContext> : IDesignTimeDbContextFactory<TContext>, IDbContextFactory<TContext> where TContext : BaseContext<TContext>
 {
-    public DataAssemblyConfiguration AssemblyConfiguration { get; } = null!;
-    protected readonly List<EntityTypeConfigurationDependency> EntityConfigurations = new();
-    protected string? ConnectionString { get; set; }
+    public DataAssemblyConfiguration AssemblyConfiguration { get; }
+    protected readonly List<EntityTypeConfigurationDependency> EntityConfigurations;
+    protected DbContextOptionsBuilder<TContext> OptionsBuilder { get; set; }
 
+    /// <summary>
+    /// Parameterless constructor called by migrations tool
+    /// </summary>
     protected BaseContextFactory()
     {
-        ConnectionString = Environment.GetEnvironmentVariable("EFCORETOOLSDB");
-        if (string.IsNullOrEmpty(ConnectionString))
-        {
-            throw new InvalidOperationException("The connection string was not set in the 'EFCORETOOLSDB' environment variable.");
-        }
     }
 
-    protected BaseContextFactory(DataAssemblyConfiguration assemblyConf, string connectionString)
+    protected BaseContextFactory(DataAssemblyConfiguration assemblyConf, DbContextOptionsBuilder<TContext> optionsBuilder)
     {
-        ConnectionString = connectionString;
+        OptionsBuilder = optionsBuilder;
 
         AssemblyConfiguration = assemblyConf;
         EntityConfigurations = new List<EntityTypeConfigurationDependency>();
