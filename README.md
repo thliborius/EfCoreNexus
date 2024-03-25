@@ -48,12 +48,9 @@ These are the steps that are neccessary to hook up the entity framework via EfCo
 
 - Add a DbContext and DbContextFactory class, derived from EfCoreNexus base classes BaseContext and BaseContextFactory.
 ```
-public class MainContext : BaseContext<MainContext>
+public class MainContext(DbContextOptions<MainContext> options, IEnumerable<EntityTypeConfigurationDependency> configurations) 
+	: BaseContext<MainContext>(options, configurations)
 {
-    public MainContext(DbContextOptions<MainContext> options, IEnumerable<EntityTypeConfigurationDependency> configurations) 
-    : base(options, configurations)
-    {    
-    }
 }
 ```
 ```
@@ -91,12 +88,9 @@ public class Test : IEntity
 - For each entity you need a provider class that must be derived from ProviderBase. The base class will supply you with all the standard CRUD operations (GetAll, GetById, Create, Update, Delete). If you'd like to use special queries you can implement your own queries like the GetActiveOrderedByDate method in the example.
 
 ```
-public class TestProvider : ProviderBase<Test, Guid, MainContext>
+public class TestProvider(TransactionService<MainContext> transactionSvc) 
+	: ProviderBase<Test, Guid, MainContext>(transactionSvc)
 {
-    public TestProvider(TransactionService<MainContext> transactionSvc) : base(transactionSvc)
-    {
-    }
-
     public async Task<IList<Test>> GetActiveOrderedByDate()
     {
         var ctx = await GetContextAsync().ConfigureAwait(false);

@@ -5,12 +5,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace EfCoreNexus.TestApp.Data.Context;
 
-public class MainContext : BaseContext<MainContext>
+public class MainContext(DbContextOptions<MainContext> options, IEnumerable<EntityTypeConfigurationDependency> configurations) : BaseContext<MainContext>(options, configurations)
 {
-    public MainContext(DbContextOptions<MainContext> options, IEnumerable<EntityTypeConfigurationDependency> configurations) : base(options, configurations)
-    {
-    }
-
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         base.OnConfiguring(optionsBuilder);
