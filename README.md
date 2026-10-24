@@ -31,6 +31,13 @@ Integrate the entity framework core into your blazor app with ease and less code
 With the help of reflection, the entity, the provider and the optional configuration classes getting registered. After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones. Additionally you can add a configuration for each entity.
 
 
+## Development branches
+
+- `main` contains the stable, published version and remains the default branch.
+- `v2` is the development branch for the next major version, EfCoreNexus 2.0.
+- Create feature branches from `v2` and integrate them through pull requests
+  targeting `v2`. The .NET 10 baseline migration is the first such pull request.
+
 ## Build and test (.NET 10 baseline)
 
 All four projects target `net10.0` and use EF Core 10.0.13. Install the stable
