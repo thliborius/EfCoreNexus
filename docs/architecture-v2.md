@@ -13,7 +13,7 @@ Implementation status: #8 supplies safe context ownership; #9 implements native
 provider DI, entity discovery and the two protected ownership helpers. See the
 [native setup guide](native-setup.md) for the usable subset and retained legacy
 components. Issue #10 implements the ordinary CRUD contract. Transaction
-contracts below await #11.
+contracts below are implemented in #11; see section 10 for cleanup policy and evidence.
 
 Review baseline: `origin/v2` at
 [`64a63ba`](https://github.com/thliborius/EfCoreNexus/tree/64a63ba780e57259d45415f8ee5de4ea7359c06e),
@@ -298,7 +298,7 @@ Native AOT support and a source generator are not proposed for the first v2.
 ## 3. Public API and consumer examples
 
 These examples describe the full selected v2 contract. Native setup and custom
-operations are implemented in #9 and ordinary CRUD in #10; the runner awaits #11.
+operations are implemented in #9, ordinary CRUD in #10 and the runner in #11.
 `ct` denotes an application-provided `CancellationToken`; ordinary EF/Blazor
 namespaces are omitted for brevity.
 
@@ -981,7 +981,7 @@ protected ownership helpers are now implemented. See [native-setup.md](native-se
 for actual usage, discovery rules and the temporary legacy boundary. The #8
 snapshot below records the earlier implementation; provider wiring is no longer
 deferred. Ordinary v2 CRUD is implemented in #10; transaction APIs in the
-earlier proposal still belong to #11.
+earlier proposal are now implemented in #11 (section 10).
 
 [Issue #8](https://github.com/thliborius/EfCoreNexus/issues/8) authorizes the first
 implementation step. The review/proposal wording above records the earlier API
@@ -1112,9 +1112,40 @@ application-managed CLR tokens. Shadow/indexer/complex tokens need specialized
 native operations. SQLite computed-column tests cover fresh/stale generic edits;
 SQL Server rowversion remains unverified without a provider integration test.
 
-Issue #11 still owns the four context-first write overloads and
-`TransactionRunner`. When adding them, retain native tracked identity and
-existing original tokens on already tracked inputs, transfer detached expected
-tokens onto an existing tracked row, reject added/deleted tracked update inputs,
-and verify immediate saves of the entire borrowed tracker. Keep the ownership,
-rollback/failure and transaction tests from section 4 within that issue.
+Issue #11 implements the four context-first writes and `TransactionRunner`,
+including tracked identity/original tokens, detached expected tokens and rejection
+of added/deleted update inputs/targets. See the implementation update below.
+
+
+## 10. Optional transaction support implemented in issue #11
+
+`TransactionRunner<TContext>` in `EfCoreNexus.Framework.Services` implements the
+single callback signature from section 4 using a native factory, local transaction
+and #8's context ownership helper. The four context-first virtual provider writes
+are implemented; ordinary writes delegate to them. There is no extra interface,
+registration helper, dependency, options hierarchy or retry layer.
+
+The internal cleanup choice from section 7 is resolved: rollback receives an
+independent five-second cancellation token. Secondary rollback and transaction
+disposal exceptions use `Exception.Data` alongside the existing context-disposal
+key. Cleanup-only failures propagate. Exceptions after acknowledged commit carry
+`EfCoreNexus.CommitOutcome = "Committed"`; commit exceptions carry `"Unknown"`,
+even after rollback is attempted. No rollback runs after acknowledged commit.
+See [native-setup.md](native-setup.md#optional-multi-provider-transactions) for
+exact keys, ownership rules, examples and limitations.
+
+The new SQLite integration tests cover two providers, intermediate generated keys,
+repeated updates with refreshed tracked tokens, whole-tracker immediate/final
+saves, rollback on callback/provider/final-save/concurrency failure, both delete
+forms, independent ordinary calls, overlapping independent invocations and an
+exception after the database actually committed. The overlap/independence tests
+use native deferred SQLite transactions with sequenced writes, so they establish
+ownership rather than simultaneous writer support. Small boundary doubles cover
+creation/begin/callback/save/commit/cancellation and combined rollback/disposal
+failures, rollback timeout and awaiting both asynchronous disposals. Borrowed CRUD
+regressions reuse #10's existing model/fixture instead of duplicating its suite.
+
+The old transaction service and its ambient selection path remain required by
+the unmigrated sample and inherited tests. Their removal is tied to #12's consumer
+migration; #11 adds no fallback or compatibility layer. Retry-enabled execution
+strategies and SQL Server-specific behavior remain untested/unsupported here.

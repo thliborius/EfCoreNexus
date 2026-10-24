@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace EfCoreNexus.Framework.Provider;
 
-/// <summary>A provider using a fresh, asynchronously disposed context for each operation.</summary>
+/// <summary>Ordinary calls own a fresh context; context-first writes borrow the caller's context.</summary>
 public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEntity, TId>
     where TEntity : class
     where TId : notnull
@@ -41,12 +41,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
     public virtual Task CreateAsync(TEntity entity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        return WithContextAsync(async (db, token) =>
-        {
-            GetKey(db);
-            await db.Set<TEntity>().AddAsync(entity, token).ConfigureAwait(false);
-            await db.SaveChangesAsync(token).ConfigureAwait(false);
-        }, ct);
+        return WithContextAsync((db, token) => CreateAsync(db, entity, token), ct);
     }
 
     /// <summary>
@@ -59,16 +54,66 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
     public virtual Task UpdateAsync(TEntity entity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        return WithContextAsync(async (db, token) =>
+        return WithContextAsync((db, token) => UpdateAsync(db, entity, token), ct);
+    }
+
+    /// <summary>Deletes the current row. Missing at lookup is a no-op; later races can conflict.</summary>
+    public virtual Task DeleteAsync(TId id, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        return WithContextAsync((db, token) => DeleteAsync(db, id, token), ct);
+    }
+
+    /// <summary>
+    /// Deletes using the key and unchanged original CLR concurrency tokens, without a lookup.
+    /// A missing row or stale version throws DbUpdateConcurrencyException.
+    /// Application-managed CLR tokens are supported because deletion needs no renewal.
+    /// </summary>
+    public virtual Task DeleteAsync(TEntity entity, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        return WithContextAsync((db, token) => DeleteAsync(db, entity, token), ct);
+    }
+
+    /// <summary>
+    /// Adds and immediately saves the entire caller-owned tracker, including other entity types.
+    /// Never creates/disposes the context or manages its transaction. Ordinary calls are independent.
+    /// </summary>
+    public virtual async Task CreateAsync(TContext db, TEntity entity, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(entity);
+        GetKey(db);
+        await db.Set<TEntity>().AddAsync(entity, ct).ConfigureAwait(false);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies the ordinary scalar-edit contract and immediately saves the entire caller-owned tracker,
+    /// even for an unchanged edit. Reuses tracked identity and preserves already tracked input's
+    /// original tokens; detached inputs supply expected tokens. Added/deleted update targets are rejected.
+    /// Never owns the context or transaction. Generated values refresh tracked inputs only.
+    /// </summary>
+    public virtual async Task UpdateAsync(TContext db, TEntity entity, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(entity);
+        var key = GetKey(db);
+        var source = db.Entry(entity);
+        var concurrency = GetConcurrencyProperties(source.Metadata, forUpdate: true);
+        var id = source.Property(key.Name).CurrentValue;
+        if (source.State is EntityState.Added or EntityState.Deleted)
+            throw new InvalidOperationException($"{typeof(TEntity).Name}: added/deleted entities require a specialized operation.");
+
+        var row = await db.Set<TEntity>().FindAsync([id], ct).ConfigureAwait(false)
+            ?? throw new KeyNotFoundException($"{typeof(TEntity).Name} with key '{id}' was not found.");
+        var target = db.Entry(row);
+        if (target.State is EntityState.Added or EntityState.Deleted)
+            throw new InvalidOperationException($"{typeof(TEntity).Name}: added/deleted entities require a specialized operation.");
+
+        if (source.State == EntityState.Detached)
         {
-            var key = GetKey(db);
-            var source = db.Entry(entity);
-            var concurrency = GetConcurrencyProperties(source.Metadata, forUpdate: true);
-            var id = source.Property(key.Name).CurrentValue;
-            var row = await db.Set<TEntity>().FindAsync([id], token).ConfigureAwait(false)
-                ?? throw new KeyNotFoundException($"{typeof(TEntity).Name} with key '{id}' was not found.");
-            var target = db.Entry(row);
-            var changed = false;
+            var changed = target.Properties.Any(p => p.IsModified);
             foreach (var property in target.Metadata.GetProperties())
             {
                 if (property.IsKey() || property.IsShadowProperty() || property.IsIndexerProperty()
@@ -83,45 +128,56 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
                 changed = true;
             }
 
-            if (!changed) return;
-            foreach (var property in concurrency)
-                target.Property(property.Name).OriginalValue = source.Property(property.Name).CurrentValue;
-            await db.SaveChangesAsync(token).ConfigureAwait(false);
-        }, ct);
-    }
-
-    /// <summary>Deletes the current row. Missing at lookup is a no-op; later races can conflict.</summary>
-    public virtual Task DeleteAsync(TId id, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-        return WithContextAsync(async (db, token) =>
-        {
-            GetKey(db);
-            var row = await db.Set<TEntity>().FindAsync([id], token).ConfigureAwait(false);
-            if (row is null) return;
-            db.Remove(row);
-            await db.SaveChangesAsync(token).ConfigureAwait(false);
-        }, ct);
+            if (changed)
+                foreach (var property in concurrency)
+                    target.Property(property.Name).OriginalValue = source.Property(property.Name).CurrentValue;
+        }
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Deletes using the key and unchanged original CLR concurrency tokens, without a lookup.
-    /// A missing row or stale version throws DbUpdateConcurrencyException.
-    /// Application-managed CLR tokens are supported because deletion needs no renewal.
+    /// Deletes the current row by native FindAsync, including a tracked instance. A missing row is a
+    /// no-op for this entity, but still saves the entire caller-owned tracker immediately.
+    /// Never owns the context or transaction. Ordinary calls use independent contexts.
     /// </summary>
-    public virtual Task DeleteAsync(TEntity entity, CancellationToken ct = default)
+    public virtual async Task DeleteAsync(TContext db, TId id, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(id);
+        GetKey(db);
+        var row = await db.Set<TEntity>().FindAsync([id], ct).ConfigureAwait(false);
+        if (row is not null) db.Remove(row);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Deletes by key and expected CLR tokens without a database lookup, reusing any tracked instance.
+    /// Tracked inputs retain original tokens; detached inputs supply expected tokens.
+    /// Added targets are rejected with InvalidOperationException before changing state or saving.
+    /// Immediately saves the entire caller-owned tracker. Never owns its context or transaction.
+    /// </summary>
+    public virtual async Task DeleteAsync(TContext db, TEntity entity, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(entity);
-        return WithContextAsync(async (db, token) =>
+        var key = GetKey(db);
+        var source = db.Entry(entity);
+        var concurrency = GetConcurrencyProperties(source.Metadata, forUpdate: false);
+        var detached = source.State == EntityState.Detached;
+        var target = source;
+        if (detached)
         {
-            GetKey(db);
-            var entry = db.Entry(entity);
-            var concurrency = GetConcurrencyProperties(entry.Metadata, forUpdate: false);
-            entry.State = EntityState.Deleted;
+            var id = source.Property(key.Name).CurrentValue;
+            target = db.ChangeTracker.Entries<TEntity>().FirstOrDefault(entry =>
+                key.GetKeyValueComparer().Equals(entry.Property(key.Name).CurrentValue, id)) ?? source;
+        }
+        if (target.State == EntityState.Added)
+            throw new InvalidOperationException($"{typeof(TEntity).Name}: entity delete cannot delete an Added entity before it has been saved.");
+        target.State = EntityState.Deleted;
+        if (detached)
             foreach (var property in concurrency)
-                entry.Property(property.Name).OriginalValue = entry.Property(property.Name).CurrentValue;
-            await db.SaveChangesAsync(token).ConfigureAwait(false);
-        }, ct);
+                target.Property(property.Name).OriginalValue = source.Property(property.Name).CurrentValue;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private static IProperty GetKey(TContext db)

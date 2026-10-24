@@ -400,6 +400,161 @@ public class AsyncCrudTests
         Assert.Throws<ArgumentNullException>(() => provider.DeleteAsync((StringRow)null!));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BorrowedNoOpStillSavesOtherPendingChanges(bool deleteMissing)
+    {
+        var provider = Provider<IntRow, int>();
+        var row = new IntRow { Name = "unchanged" };
+        await provider.CreateAsync(row);
+        await using var db = await _factory.CreateDbContextAsync();
+        var other = new StringRow { Code = "raw", Name = "pending" };
+        db.Add(other);
+        var createdBefore = _factory.Created.Count;
+        if (deleteMissing) await provider.DeleteAsync(db, int.MaxValue);
+        else await provider.UpdateAsync(db, row);
+        Assert.That(_factory.Created.Count, Is.EqualTo(createdBefore));
+        Assert.That(db.AsyncDisposals, Is.Zero);
+        Assert.That(db.Entry(other).State, Is.EqualTo(EntityState.Unchanged));
+        Assert.That((await Provider<StringRow, string>().GetByIdAsync("raw"))!.Name, Is.EqualTo("pending"));
+    }
+
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
+    public async Task BorrowedDetachedEditReusesTrackedIdentityAndChecksExpectedTokens(bool delete, bool stale)
+    {
+        var provider = Provider<VersionRow, int>();
+        var row = new VersionRow { Name = "one", Other = "first" };
+        await provider.CreateAsync(row);
+        var edit = (await provider.GetByIdAsync(row.Id))!;
+        if (stale)
+        {
+            row.Other = "second"; // The second token alone must detect the stale edit.
+            await provider.UpdateAsync(row);
+        }
+        await using var db = await _factory.CreateDbContextAsync();
+        var tracked = (await db.Set<VersionRow>().FindAsync(row.Id))!;
+        edit.Name = "edit";
+        // Even if the tracker already holds the same pending edit, detached expected tokens apply.
+        if (!delete) tracked.Name = edit.Name;
+        Task Write() => delete ? provider.DeleteAsync(db, edit) : provider.UpdateAsync(db, edit);
+        if (stale) await Assert.ThrowsAsync<DbUpdateConcurrencyException>(Write);
+        else await Write();
+        Assert.That(db.Entry(edit).State, Is.EqualTo(EntityState.Detached));
+        Assert.That(db.ChangeTracker.Entries<VersionRow>().All(e => ReferenceEquals(e.Entity, tracked)), Is.True);
+        var stored = await provider.GetByIdAsync(row.Id);
+        if (!stale && delete) Assert.That(stored, Is.Null);
+        else Assert.That(stored!.Name, Is.EqualTo(stale ? "one" : "edit"));
+    }
+
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
+    public async Task BorrowedTrackedInputRetainsOriginalTokensDespiteChangedCurrentToken(bool delete, bool stale)
+    {
+        var provider = Provider<VersionRow, int>();
+        var row = new VersionRow { Name = "original" };
+        await provider.CreateAsync(row);
+        await using var db = await _factory.CreateDbContextAsync();
+        var tracked = (await db.Set<VersionRow>().FindAsync(row.Id))!;
+        var original = tracked.Version.ToArray();
+        if (stale)
+        {
+            row.Name = "external";
+            await provider.UpdateAsync(row);
+            tracked.Version = (await provider.GetByIdAsync(row.Id))!.Version;
+        }
+        else tracked.Version = [0]; // Current tokens must never overwrite tracked OriginalValue.
+        tracked.Name = "local";
+        Task Write() => delete ? provider.DeleteAsync(db, tracked) : provider.UpdateAsync(db, tracked);
+        if (stale)
+        {
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(Write);
+            Assert.That(db.Entry(tracked).Property(x => x.Version).OriginalValue, Is.EqualTo(original));
+        }
+        else await Write();
+        Assert.That(db.AsyncDisposals, Is.Zero);
+        var stored = await provider.GetByIdAsync(row.Id);
+        if (!stale && delete) Assert.That(stored, Is.Null);
+        else Assert.That(stored!.Name, Is.EqualTo(stale ? "external" : "local"));
+    }
+
+    [Test]
+    public async Task BorrowedEntityDeletePreservesTrackedApplicationManagedOriginalToken()
+    {
+        var provider = Provider<RevisionRow, int>();
+        var row = new RevisionRow { Revision = Guid.NewGuid() };
+        await provider.CreateAsync(row);
+        await using var db = await _factory.CreateDbContextAsync();
+        var tracked = (await db.Set<RevisionRow>().FindAsync(row.Id))!;
+        tracked.Revision = Guid.NewGuid();
+        await provider.DeleteAsync(db, tracked);
+        Assert.That(await provider.GetByIdAsync(row.Id), Is.Null);
+    }
+
+    [TestCase(EntityState.Added, false)]
+    [TestCase(EntityState.Deleted, false)]
+    [TestCase(EntityState.Added, true)]
+    [TestCase(EntityState.Deleted, true)]
+    public async Task BorrowedUpdateRejectsAddedOrDeletedTrackedTargets(EntityState state, bool detachedInput)
+    {
+        var provider = Provider<VersionRow, int>();
+        await using var db = await _factory.CreateDbContextAsync();
+        var tracked = new VersionRow { Id = 123, Name = "tracked" };
+        db.Entry(tracked).State = state;
+        var input = detachedInput ? new VersionRow { Id = tracked.Id, Name = "detached" } : tracked;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.UpdateAsync(db, input));
+        Assert.That(db.Entry(tracked).State, Is.EqualTo(state));
+        Assert.That(db.AsyncDisposals, Is.Zero);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BorrowedEntityDeleteRejectsAddedTrackedTargetWithoutSaving(bool detachedInput)
+    {
+        var provider = Provider<StringRow, string>();
+        await using var db = await _factory.CreateDbContextAsync();
+        var tracked = new StringRow { Code = "not-saved", Name = "pending insert" };
+        db.Add(tracked);
+        var other = new IntRow { Name = "other pending insert" };
+        db.Add(other);
+        var input = detachedInput ? new StringRow { Code = tracked.Code, Name = "detached" } : tracked;
+        var createdBefore = _factory.Created.Count;
+        var saveAttempted = false;
+        _saves.Next = (_, _) => { saveAttempted = true; return Task.CompletedTask; };
+        _commands.Sql.Clear();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.DeleteAsync(db, input));
+
+        Assert.That(failure!.Message, Does.Contain(nameof(StringRow)).And.Contain("Added"));
+        Assert.That(db.Entry(tracked).State, Is.EqualTo(EntityState.Added));
+        Assert.That(db.Entry(input).State, Is.EqualTo(detachedInput ? EntityState.Detached : EntityState.Added));
+        Assert.That(db.Entry(other).State, Is.EqualTo(EntityState.Added));
+        Assert.That(saveAttempted, Is.False);
+        Assert.That(_commands.Sql, Is.Empty);
+        Assert.That(_factory.Created.Count, Is.EqualTo(createdBefore));
+        Assert.That(db.AsyncDisposals, Is.Zero);
+    }
+
+    [Test]
+    public async Task BorrowedWritesValidateArgumentsBeforeUsingCallerResources()
+    {
+        var provider = Provider<StringRow, string>();
+        await using var db = await _factory.CreateDbContextAsync();
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.CreateAsync(null!, new StringRow()));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.UpdateAsync(null!, new StringRow()));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.DeleteAsync(null!, "key"));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.DeleteAsync(null!, new StringRow()));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.CreateAsync(db, null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.UpdateAsync(db, null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.DeleteAsync(db, (string)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.DeleteAsync(db, (StringRow)null!));
+        Assert.That(db.AsyncDisposals, Is.Zero);
+    }
+
     private CrudProvider<TEntity, TId> Provider<TEntity, TId>() where TEntity : class where TId : notnull
         => new(_factory);
     private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);

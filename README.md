@@ -42,7 +42,8 @@ The [v2 architecture and migration proposal](docs/architecture-v2.md) records
 recommendations for review in [issue #1](https://github.com/thliborius/EfCoreNexus/issues/1).
 The [native setup guide](docs/native-setup.md) describes the implemented provider
 DI/entity discovery helpers and safe custom operations, plus the temporary legacy
-boundary. Ordinary v2 CRUD and the transaction runner follow in issues #10/#11.
+boundary. Ordinary async CRUD and the optional transaction runner are implemented;
+see the native guide for shared-context writes and cleanup semantics.
 
 ## Build and test (.NET 10 baseline)
 
