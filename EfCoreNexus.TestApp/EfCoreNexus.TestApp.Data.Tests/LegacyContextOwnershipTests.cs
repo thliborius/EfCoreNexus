@@ -1,4 +1,4 @@
-using EfCoreNexus.Framework.Provider;
+using EfCoreNexus.Framework.Legacy.Provider;
 using EfCoreNexus.Framework.Services;
 using EfCoreNexus.TestApp.Data.Context;
 using EfCoreNexus.TestApp.Data.Entities;

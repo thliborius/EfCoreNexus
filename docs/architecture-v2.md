@@ -9,6 +9,11 @@ builds on the proposal from [PR #5](https://github.com/thliborius/EfCoreNexus/pu
 approve, not an already approved or implemented API. This documentation change
 closes neither issue; human review comes before implementation.
 
+Implementation status: #8 supplies safe context ownership; #9 implements native
+provider DI, entity discovery and the two protected ownership helpers. See the
+[native setup guide](native-setup.md) for the usable subset and retained legacy
+components. The ordinary CRUD and transaction contracts below await #10/#11.
+
 Review baseline: `origin/v2` at
 [`64a63ba`](https://github.com/thliborius/EfCoreNexus/tree/64a63ba780e57259d45415f8ee5de4ea7359c06e),
 including the .NET 10 migration. “v1 behavior” below means the inherited API on
@@ -231,7 +236,7 @@ changing tenants within a circuit requires a separate explicit design. See
 and [Blazor factory lifetimes](https://learn.microsoft.com/en-us/ef/core/miscellaneous/multitenancy#blazor-server-apps-and-the-life-of-the-factory).
 
 Automation is opt-in but **part of the initial v2 core convenience**, with these
-proposed extension signatures (not an options/registration framework):
+extension signatures (implemented in #9, without an options/registration framework):
 
 ```csharp
 IServiceCollection AddNexusProviders<TContext>(this IServiceCollection services,
@@ -291,9 +296,10 @@ Native AOT support and a source generator are not proposed for the first v2.
 
 ## 3. Public API and consumer examples
 
-All v2 names/signatures below are proposed, not currently available. `ct` denotes
-an application-provided `CancellationToken`; ordinary EF/Blazor namespaces are
-omitted for brevity.
+These examples describe the full selected v2 contract. Native setup and custom
+operations are implemented in #9; ordinary CRUD and the runner await #10/#11.
+`ct` denotes an application-provided `CancellationToken`; ordinary EF/Blazor
+namespaces are omitted for brevity.
 
 ### Alternatives
 
@@ -968,6 +974,13 @@ follow-up work only; this document authorizes no issue creation, merge, release,
 or deployment.
 
 ## 8. Ownership foundation implemented in issue #8
+
+**Implementation update (#9):** native provider DI, model discovery and both
+protected ownership helpers are now implemented. See [native-setup.md](native-setup.md)
+for actual usage, discovery rules and the temporary legacy boundary. The #8
+snapshot below records the earlier implementation; provider wiring is no longer
+deferred. Ordinary v2 CRUD and transaction APIs in the earlier proposal still
+belong to #10/#11.
 
 [Issue #8](https://github.com/thliborius/EfCoreNexus/issues/8) authorizes the first
 implementation step. The review/proposal wording above records the earlier API
