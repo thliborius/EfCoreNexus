@@ -1,12 +1,12 @@
-# Native setup on v2 (issue #9)
+# Native setup and async CRUD on v2
 
 **Less boilerplate. More Entity Framework.** Configure an assembly/model boundary
 once. An eligible new entity or concrete provider inside it needs no per-type DI
 registration or `DbSet` property. Discovery is optional; native EF registration
 and model building remain available.
 
-This page describes implemented setup and custom operations. Ordinary v2 CRUD
-follows in #10; shared-context writes and `TransactionRunner` follow in #11.
+This page describes implemented setup, ordinary async CRUD (#10), and custom
+operations. Shared-context writes and `TransactionRunner` follow in #11.
 The complete future API remains in [architecture-v2.md](architecture-v2.md).
 
 ## Before and after
@@ -95,8 +95,15 @@ changes remain the application's responsibility; register overrides deliberately
 instead of relying on the container's last-registration behavior.
 
 Two providers for one entity are legal concrete services. There is no automatic
-interface selection. Ordinary v2 `IProviderCrud` mappings arrive with #10; the
-currently retained interface still belongs to the legacy CRUD contract.
+interface selection. The optional ordinary CRUD interface is mapped explicitly:
+
+```csharp
+services.AddScoped<IProviderCrud<Customer, int>>(
+    sp => sp.GetRequiredService<CustomerProvider>());
+```
+
+`IProviderCrud<TEntity,TId>` has only the six async methods below, with
+`TEntity : class` and `TId : notnull`; it requires neither `IEntity` nor `IProvider`.
 
 `RegisterNexusEntities(Assembly assembly, Func<Type,bool>? predicate = null)`
 includes concrete, closed `IEntity` classes without constructing them or requiring
@@ -131,6 +138,91 @@ cache, extra scanning dependency, or registration framework is used. For
 trimming/AOT, use explicit native DI/model registration; these scans do not claim
 trim safety or Native AOT support.
 
+## Ordinary async CRUD
+
+For a simple edit, native EF needs context creation/disposal, key lookup, scalar
+assignment and a save. The provider removes that repeated code:
+
+```csharp
+var customer = new Customer("Ada");
+await Customers.CreateAsync(customer, ct); // Generated Id is available.
+var edit = await Customers.GetByIdAsync(customer.Id, ct)
+    ?? throw new KeyNotFoundException();
+edit.Name = "Grace";
+await Customers.UpdateAsync(edit, ct);
+await Customers.DeleteAsync(customer.Id, ct);
+```
+
+All six methods are virtual and accept `CancellationToken ct = default`. Each
+ordinary call uses a fresh context and awaits asynchronous disposal on success,
+failure or cancellation. EF queries, inserts and saves use their async APIs;
+there is no hidden transaction enlistment or retry.
+
+| Method | Contract |
+| --- | --- |
+| `GetAllAsync(ct)` | Materialized `List<TEntity>`, no tracking; use specialized LINQ for large sets. |
+| `GetByIdAsync(id, ct)` | Native `FindAsync`; returns null when absent. The result has no live operation context. |
+| `CreateAsync(entity, ct)` | Native add/save, including reachable new entities and generated keys. Duplicates are database `DbUpdateException`s, without an existence pre-check. |
+| `UpdateAsync(entity, ct)` | Full edit of writable mapped CLR scalars; missing at lookup throws `KeyNotFoundException`. |
+| `DeleteAsync(id, ct)` | Deletes the current row; missing at lookup is a successful no-op. A later change/delete can raise `DbUpdateConcurrencyException`. |
+| `DeleteAsync(entity, ct)` | Deletes by key and expected original CLR tokens without a lookup. Missing or stale rows raise `DbUpdateConcurrencyException`. Without tokens, only existence is checked. |
+
+Every CRUD call validates native primary-key metadata: one CLR key whose type
+matches `TId` exactly. Convention and Fluent mappings work, including `Guid`,
+`int`, `string`, generated keys and private setters. Unmapped/keyless entities,
+composite/shadow/indexer keys and mismatched `TId` produce an
+`InvalidOperationException` identifying the entity/key before any CRUD SQL.
+Native EF remains available for those models. Null arguments produce
+`ArgumentNullException`; EF/database failures and cancellation propagate.
+
+### Full scalar edits and detached concurrency
+
+Update reads the current row, compares eligible values using EF value comparers,
+and copies only changed scalars. Metadata excludes all keys, generated
+properties, shadow/indexer values and properties whose after-save behavior is
+not `Save`. Native backing-field mappings and value converters work. Navigation,
+owned and complex graphs are not copied. Omitted/default scalar values are still
+supplied values: this is a full edit, so use a specialized provider for partial or
+allowed-field updates. Unchanged edits issue no update and do not assert a version.
+
+Keep **every original CLR concurrency token unchanged** on the detached entity
+shown to the user. Update transfers these values to EF's `OriginalValue` on the
+loaded row, preserving stale-edit detection despite the fresh lookup. It supports
+only tokens generated on update with after-save behavior `Ignore`; it never
+writes token columns. Shadow/indexer/complex tokens and application-managed token
+renewal are explicitly rejected with `InvalidOperationException`. Entity delete
+accepts application-managed CLR tokens because it needs no renewal; it rejects
+shadow/indexer/complex tokens as well. ID delete uses the currently loaded tokens.
+
+A missing update at lookup is distinct from a stale edit or deletion between
+lookup and save, which raises EF's `DbUpdateConcurrencyException`. The application
+chooses reload/conflict handling; without tokens, normal last-writer behavior
+applies. Update does not refresh the detached input's generated values: read again
+before another edit/delete. For SQL Server, `IsRowVersion()` has the intended
+metadata shape, but **SQL Server rowversion behavior has not been integration
+tested**. SQLite tests use an actual computed concurrency column; they do not
+establish SQL Server parity. See [EF concurrency](https://learn.microsoft.com/en-us/ef/core/saving/concurrency).
+
+For application-managed tokens, a specialized operation keeps original and new
+values explicit using native EF:
+
+```csharp
+public Task RenameAsync(int id, string name, Guid expectedRevision,
+    CancellationToken ct = default)
+    => WithContextAsync(async (db, token) =>
+    {
+        var row = await db.Set<Customer>().FindAsync([id], token)
+            ?? throw new KeyNotFoundException();
+        db.Entry(row).Property(x => x.Revision).OriginalValue = expectedRevision;
+        row.Name = name;
+        row.Revision = Guid.NewGuid();
+        await db.SaveChangesAsync(token);
+    }, ct);
+```
+
+This example assumes `Customer` also maps a `Guid Revision` as a concurrency
+token. There is no generic merge, patch, token factory or graph updater.
+
 ## Ownership and temporary legacy boundary
 
 Both protected `WithContextAsync` forms delegate to #8's `ContextOperations`.
@@ -142,13 +234,14 @@ failures propagate. Materialize within the callback; do not return queries,
 streams or lazy-loading dependencies, or leave background work running.
 
 `ProviderBase<TEntity,TId,TContext>` now accepts only `IDbContextFactory<TContext>`
-with `TEntity : class`, `TId : notnull`, `TContext : DbContext`. It currently offers
-the two ownership helpers; #10 supplies its ordinary CRUD contract. It neither
-depends on nor participates in `TransactionService`.
+with `TEntity : class`, `TId : notnull`, `TContext : DbContext`. It offers
+the six ordinary CRUD methods and two ownership helpers. It neither depends on
+nor participates in `TransactionService`.
 
-The old provider implementation moved unchanged to
-`EfCoreNexus.Framework.Legacy.Provider.ProviderBase`. This is a **source-breaking
-namespace/constructor change** for existing providers. The sample and inherited
+The old provider implementation and its CRUD interface are retained in
+`EfCoreNexus.Framework.Legacy.Provider`. This is a **source-breaking
+namespace/constructor/interface change** for existing providers and callers
+explicitly naming the old interface. The sample and inherited
 tests explicitly import the legacy namespace. There is no dual-constructor base,
 automatic fallback, adapter, or new CRUD/transaction implementation.
 
@@ -156,7 +249,7 @@ automatic fallback, adapter, or new CRUD/transaction implementation.
 | --- | --- |
 | Legacy `ProviderBase`, `IProviderCrud`, `IProvider`, `ProviderFactory` / `IProviderFactory`, `DataService` / `IDataService`, `TransactionService` | Existing sample CRUD and transactions still depend on them. Keep behavior/regression tests until #10/#11 and consumer migration permit removal; do not port new features to this path. |
 | `BaseContext`, `BaseContextFactory`, `StartupConfiguration`, `DataAssemblyConfiguration`, `EntityTypeConfigurationDependency` | Still required by that sample/setup and its regression tests. Native consumers bypass the entire chain; remove it when remaining consumers migrate. |
-| `System.Linq.Dynamic.Core` | Only the legacy key query still needs it; review removal after #10 and remaining legacy consumers. No package/dependency was added for #9. |
+| `System.Linq.Dynamic.Core` | Only the legacy key query still needs it; review removal after #10 and remaining legacy consumers. No dependency was added or changed for #9/#10. |
 
 No legacy CRUD, tracking or transaction semantics were changed. Its characterized
 ownership defects remain visible in `LegacyContextOwnershipTests`; the native
@@ -187,3 +280,30 @@ two models in one assembly and independently built runtime/design-time models.
 The audit found no known vulnerable packages in all four projects, including
 transitive dependencies, using nuget.org. No package versions/dependencies changed;
 local package generation was disabled and nothing was published.
+
+
+## Validation for issue #10
+
+Based on `origin/v2` at `6cd3471`, after PR #14 merged. Executed on Linux with
+.NET SDK 10.0.113 / runtime 10.0.13 and EF Core 10.0.13:
+
+```sh
+dotnet restore
+dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
+dotnet build --no-restore -p:GeneratePackageOnBuild=false --verbosity minimal
+dotnet test --no-build --no-restore --filter FullyQualifiedName~AsyncCrudTests --verbosity minimal
+dotnet test --no-build --no-restore --logger 'trx;LogFileName=issue-10.trx' --results-directory /tmp/efcorenexus-issue-10-results --verbosity minimal
+dotnet list package --vulnerable --include-transitive
+```
+
+Restore and build passed with zero build warnings/errors. All **116 tests passed**
+without failures/skips: 90 existing cases and **26 new CRUD cases**. The focused
+CRUD run passed all 26. Coverage includes the six-method interface, metadata keys,
+generated IDs, database duplicates, actual changed SQL columns, full-edit defaults,
+EF comparers/backing fields/converters, untouched navigation/owned/complex graphs,
+missing-row contracts, stale and overlapping updates, multiple generated tokens
+(including binary values), lookup/save deletion races, both delete variants,
+explicit application-managed renewal, rejected mappings, cancellation and async
+context disposal. Existing ownership and DI cases were retained without repetition.
+The transitive audit found no known vulnerable packages in all four projects.
+No packages were published; SQL Server and Windows were not exercised.

@@ -12,7 +12,8 @@ closes neither issue; human review comes before implementation.
 Implementation status: #8 supplies safe context ownership; #9 implements native
 provider DI, entity discovery and the two protected ownership helpers. See the
 [native setup guide](native-setup.md) for the usable subset and retained legacy
-components. The ordinary CRUD and transaction contracts below await #10/#11.
+components. Issue #10 implements the ordinary CRUD contract. Transaction
+contracts below await #11.
 
 Review baseline: `origin/v2` at
 [`64a63ba`](https://github.com/thliborius/EfCoreNexus/tree/64a63ba780e57259d45415f8ee5de4ea7359c06e),
@@ -297,7 +298,7 @@ Native AOT support and a source generator are not proposed for the first v2.
 ## 3. Public API and consumer examples
 
 These examples describe the full selected v2 contract. Native setup and custom
-operations are implemented in #9; ordinary CRUD and the runner await #10/#11.
+operations are implemented in #9 and ordinary CRUD in #10; the runner awaits #11.
 `ct` denotes an application-provided `CancellationToken`; ordinary EF/Blazor
 namespaces are omitted for brevity.
 
@@ -979,8 +980,8 @@ or deployment.
 protected ownership helpers are now implemented. See [native-setup.md](native-setup.md)
 for actual usage, discovery rules and the temporary legacy boundary. The #8
 snapshot below records the earlier implementation; provider wiring is no longer
-deferred. Ordinary v2 CRUD and transaction APIs in the earlier proposal still
-belong to #10/#11.
+deferred. Ordinary v2 CRUD is implemented in #10; transaction APIs in the
+earlier proposal still belong to #11.
 
 [Issue #8](https://github.com/thliborius/EfCoreNexus/issues/8) authorizes the first
 implementation step. The review/proposal wording above records the earlier API
@@ -1091,3 +1092,29 @@ ownership cases; zero failures/skips. The focused helper run also passed all 24
 cases. The audit reported no known vulnerable packages across all four projects
 using nuget.org, including transitive dependencies. Local package generation was
 disabled for the build; nothing was published.
+
+
+## 9. Ordinary async CRUD implemented in issue #10
+
+The six ordinary virtual methods and optional `IProviderCrud<TEntity,TId>` are
+implemented on the native provider. See [native-setup.md](native-setup.md#ordinary-async-crud)
+for the supported keys, scalar eligibility, detached-token requirements, errors
+and consumer examples. Context ownership and automatic DI/model discovery are
+unchanged. The old interface moved alongside the legacy provider so the sample
+and inherited regression tests retain their existing behavior.
+
+Scalar eligibility from section 7 is resolved using public EF metadata and entry
+APIs: single CLR key, EF value comparers, `ValueGenerated.Never` and after-save
+`Save` for copied scalars; all keys, generated values and graphs are excluded.
+Only store-generated CLR concurrency tokens with on-update generation and
+after-save `Ignore` are supported for generic updates. Entity delete also accepts
+application-managed CLR tokens. Shadow/indexer/complex tokens need specialized
+native operations. SQLite computed-column tests cover fresh/stale generic edits;
+SQL Server rowversion remains unverified without a provider integration test.
+
+Issue #11 still owns the four context-first write overloads and
+`TransactionRunner`. When adding them, retain native tracked identity and
+existing original tokens on already tracked inputs, transfer detached expected
+tokens onto an existing tracked row, reject added/deleted tracked update inputs,
+and verify immediate saves of the entire borrowed tracker. Keep the ownership,
+rollback/failure and transaction tests from section 4 within that issue.
