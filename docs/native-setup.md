@@ -212,6 +212,62 @@ public Task RenameAsync(int id, string name, Guid expectedRevision,
 This example assumes `Customer` also maps a `Guid Revision` as a concurrency
 token. There is no generic merge, patch, token factory or graph updater.
 
+## Security boundaries: filters, authorization and full edits
+
+**Query filters do not replace authorization.** The application must authorize
+user and tenant access to each operation and validate changes on the server.
+EfCoreNexus has no user/tenant permission context and provides no authorization
+or tenant-isolation guarantee. Concurrency tokens detect stale data, not access
+rights. A soft-delete query filter alone does not turn deletes into soft deletes.
+See [EF query filters](https://learn.microsoft.com/en-us/ef/core/querying/filters).
+
+SQLite integration tests in `AsyncCrudTests` use tenant IDs 1/2, a soft-delete
+filter and a generated concurrency token. They verify actual persisted rows and
+captured SQL, with these results:
+
+| Operation | Filter behavior |
+| --- | --- |
+| `GetAllAsync`, `GetByIdAsync` | Both hide foreign-tenant and soft-deleted rows with fresh factory contexts. `GetByIdAsync` uses `FindAsync`; it is not intrinsically an authorization check. |
+| `UpdateAsync(entity)` / `UpdateAsync(db, entity)`, target not tracked | Filtered lookup cannot find the row: `KeyNotFoundException`, no target UPDATE. A detached foreign-tenant snapshot alone does not bypass this lookup. |
+| `DeleteAsync(id)` / `DeleteAsync(db, id)`, target not tracked | Filtered lookup cannot find the row: no target DELETE. |
+| Borrowed update or ID delete, target already tracked | `FindAsync` reuses tracked identity without a query/filter recheck. A hidden row loaded using `IgnoreQueryFilters` can be updated or physically deleted, including when the update input is a detached snapshot. |
+| `DeleteAsync(entity)` / `DeleteAsync(db, entity)` | No lookup: even hidden rows can be physically deleted with correct key/tokens. This also applies to tracked targets and detached snapshots matching tracked identity. Stale tokens still raise `DbUpdateConcurrencyException`. |
+
+There are no borrowed read overloads; reads on a shared context use native EF.
+Native [FindAsync checks tracked identity first](https://learn.microsoft.com/en-us/ef/core/change-tracking/entity-entries#find-and-findasync);
+a normal filtered LINQ query still goes to the database. Merely tracking an entity
+in another context does not make it tracked in an ordinary provider call's fresh
+context. Do not reuse a context across authorization/tenant boundaries.
+
+In the tested model, UPDATE/DELETE predicates contain the primary key and original
+concurrency token, **not** `TenantId` or `IsDeleted`. Filters affect the lookup,
+not subsequent `SaveChanges` predicates; they cannot prevent an intervening change
+to tenant/visibility unless a separate application/database rule covers it. These
+are expected EF behaviors, not reproduced defects in EfCoreNexus. Borrowed writes
+also save all other pending tracker changes, even when the target lookup is a no-op.
+
+Never pass unchecked user-controlled entities into generic full-scalar updates.
+Writable scalars such as `TenantId`, `IsDeleted` and `IsAdmin` are ordinary fields:
+a visible row can be moved to another tenant, hidden or granted privileges by such
+an edit. Prefer DTOs and explicit allowed assignments, or a specialized provider
+operation that loads and authorizes the row, applies permitted changes and saves.
+An unchecked full edit such as `await Customers.UpdateAsync(boundEntity)` should
+instead become an application-specific operation such as
+`await Customers.RenameAsync(id, renameDto.Name, expectedRevision, ct)`, with
+server-side permission checks inside that operation. DTOs alone are not authorization.
+
+### Factory lifetime for tenant-dependent configuration
+
+`AddDbContextFactory` defaults to singleton and caches options. If options or
+factory dependencies depend on the current user/tenant, choose a compatible
+lifetime; in Blazor Server, `ServiceLifetime.Scoped` normally follows the circuit.
+A scoped factory still caches its options: switching tenant/database within a
+circuit requires configuration to be reevaluated, and existing providers/contexts
+must not retain the old configuration. Simply registering a transient factory
+does not refresh one already captured by a scoped provider. Keep tenant state on
+each context instance when used in filters, and review scope/switching behavior in
+the application. See Microsoft's [multi-tenancy and factory lifetime guidance](https://learn.microsoft.com/en-us/ef/core/miscellaneous/multitenancy).
+
 ## Optional multi-provider transactions
 
 For operations that need only one save, use a native factory context and
