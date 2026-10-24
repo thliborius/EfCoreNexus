@@ -20,6 +20,12 @@ Read [docs/design-principles.md](docs/design-principles.md) before proposing arc
 - Keep PRs small and focused. State breaking changes, assumptions, and relevant trade-offs.
 - Do not silently change existing CRUD, transaction, or tracking semantics. Propose and test behavior changes explicitly.
 
+## Ticket completion notifications
+
+- Use the same Telegram completion mechanism as the Maus project: include `<!-- TELEGRAM:TICKET_DONE -->` exactly once, as the final line of every terminal ticket response. The existing automation uses this marker to trigger the notification.
+- Emit the marker only when ticket handling has ended. Progress updates, intermediate results, pending questions, and running CI must not trigger a Telegram notification.
+- Include the marker even when handling ends with a blocker, cancellation, or partial implementation. It signals the end of handling, not success; state the actual outcome and any remaining work clearly.
+
 ## Quality gates
 
 - Current development baseline: .NET 10 / EF Core 10; keep package versions compatible and avoid known vulnerable dependencies.
