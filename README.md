@@ -31,14 +31,102 @@ Integrate the entity framework core into your blazor app with ease and less code
 With the help of reflection, the entity, the provider and the optional configuration classes getting registered. After it had been set up, it is really easy to add new table to your app. Now you only have to add two classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones. Additionally you can add a configuration for each entity.
 
 
-## Run the sample app
+## Development branches
 
-- Check out the repo.
-- Edit the EfCoreNexus.TestApp\EfCoreNexus.TestApp.Data\migrations_connectionstring.bat and adjust the connection string to an empty sql server database.
-- Call migrations_add.bat with a migration name as parameter, e.g. "migrations_add.bat Init".
-- Call migrations_updatedb.bat.
-- Add something to the table test that was created in the database, if you want to see something in the app.
-- Open the solution and start the TestApp (just hit F5).
+- `main` contains the stable, published version and remains the default branch.
+- `v2` is the development branch for the next major version, EfCoreNexus 2.0.
+- Create feature branches from `v2` and integrate them through pull requests
+  targeting `v2`. The .NET 10 baseline migration is the first such pull request.
+
+## Build and test (.NET 10 baseline)
+
+All four projects target `net10.0` and use EF Core 10.0.13. Install the stable
+.NET 10 SDK (verified with 10.0.113 and runtime 10.0.13 on Linux Mint 22.3 /
+Ubuntu 24.04). The SDK includes the .NET and ASP.NET Core runtimes needed by
+this solution; no .NET 8 SDK/runtime or SQL Server installation is needed for tests.
+Use a current .NET 10 servicing release. SDK-free app execution requires the
+.NET 10 and ASP.NET Core 10 runtimes.
+
+From the repository root, run these same commands in a Linux shell or Windows
+PowerShell/Command Prompt:
+
+```sh
+dotnet --info
+dotnet restore
+dotnet build --no-restore
+dotnet test --no-build --verbosity normal
+dotnet list package --vulnerable --include-transitive
+```
+
+The tests create disposable SQLite in-memory databases. They do not start the
+Blazor app, connect to SQL Server, or require `EFCORETOOLSDB`. GitHub Actions
+runs these checks with .NET 10 and audits direct and transitive dependencies;
+known vulnerabilities fail the restore step.
+
+### Migration and compatibility notes
+
+- This is the technical v2 baseline; the architecture work in issue #1 follows
+  separately. The published v1.0.5 package is unchanged. Source/project-reference
+  consumers now require .NET 10; this branch does not multi-target .NET 8.
+- EF Core and the explicit ASP.NET Core package use the same 10.0.13 patch.
+  Review the [EF Core 9](https://learn.microsoft.com/ef/core/what-is-new/ef-core-9.0/breaking-changes)
+  and [EF Core 10 breaking changes](https://learn.microsoft.com/ef/core/what-is-new/ef-core-10.0/breaking-changes)
+  before applying generated migrations to an existing database. No database
+  migration is included in this baseline.
+- `System.Linq.Dynamic.Core` is updated to 1.7.4, retaining parameterized key
+  equality and the existing CRUD API. Its hardened parser defaults remain enabled;
+  downstream custom dynamic queries should review the
+  [upstream compatibility notes](https://github.com/zzzprojects/System.Linq.Dynamic.Core#breaking-changes).
+- The data project explicitly references `System.Security.Cryptography.Pkcs`
+  10.0.13 because the SQL Server provider's SqlClient dependency otherwise selects
+  vulnerable 9.0.11. This override also protects the app and tests transitively.
+- The parameterless `BaseContextFactory` constructor now initializes options and
+  discovers entity configurations in `TContext`'s assembly, just as the explicit
+  constructor does for its supplied assembly. Derived design-time factories must
+  still configure a database provider and connection before creating a context.
+- The test tooling uses current stable NUnit, adapter, analyzer, test SDK and
+  Coverlet releases with the existing `dotnet test` / VSTest workflow. NUnit 5's
+  `Assert.ThrowsAsync` returns a task, so asynchronous exception assertions are
+  awaited.
+
+## Run the sample app (requires SQL Server)
+
+The Blazor sample uses SQL Server. Its connection string in `Program.cs` defaults
+to a local Windows instance with integrated authentication. Adjust it for your
+SQL Server host and authentication method, especially on Linux. The design-time
+factory uses the separate `EFCORETOOLSDB` environment variable; changing that
+variable does not change the app's runtime connection string.
+
+Install matching stable EF tools once (or update an existing installation using
+`dotnet tool update --global dotnet-ef --version 10.0.13`):
+
+```sh
+dotnet tool install --global dotnet-ef --version 10.0.13
+```
+
+Set a connection string to an empty SQL Server database in your current shell:
+
+```sh
+# Linux (bash)
+export EFCORETOOLSDB='Server=your-server;Database=EfCoreNexus;User ID=your-user;Password=your-password;Encrypt=True'
+```
+
+```powershell
+# Windows PowerShell
+$env:EFCORETOOLSDB = 'Server=.;Database=EfCoreNexus;Integrated Security=True;TrustServerCertificate=True'
+```
+
+Then, from the repository root on either OS:
+
+```sh
+dotnet ef migrations add Init --project EfCoreNexus.TestApp/EfCoreNexus.TestApp.Data
+dotnet ef database update --project EfCoreNexus.TestApp/EfCoreNexus.TestApp.Data
+dotnet run --project EfCoreNexus.TestApp/EfCoreNexus.TestApp
+```
+
+On Windows Command Prompt, the existing `migrations_connectionstring.bat`,
+`migrations_add.bat Init` and `migrations_updatedb.bat` can alternatively be used
+from the data project directory after adjusting their connection string.
 
 ## How to use it in your project
 

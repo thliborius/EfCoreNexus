@@ -17,6 +17,9 @@ public abstract class BaseContextFactory<TContext> : IDesignTimeDbContextFactory
     /// Parameterless constructor called by migrations tool
     /// </summary>
     protected BaseContextFactory()
+        : this(new DataAssemblyConfiguration(typeof(TContext).Assembly.GetName().Name
+            ?? throw new InvalidOperationException("The context assembly has no name.")),
+            new DbContextOptionsBuilder<TContext>())
     {
     }
 
