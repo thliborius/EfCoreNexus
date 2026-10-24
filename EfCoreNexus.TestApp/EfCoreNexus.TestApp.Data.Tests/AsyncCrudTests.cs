@@ -511,6 +511,34 @@ public class AsyncCrudTests
         Assert.That(db.AsyncDisposals, Is.Zero);
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BorrowedEntityDeleteRejectsAddedTrackedTargetWithoutSaving(bool detachedInput)
+    {
+        var provider = Provider<StringRow, string>();
+        await using var db = await _factory.CreateDbContextAsync();
+        var tracked = new StringRow { Code = "not-saved", Name = "pending insert" };
+        db.Add(tracked);
+        var other = new IntRow { Name = "other pending insert" };
+        db.Add(other);
+        var input = detachedInput ? new StringRow { Code = tracked.Code, Name = "detached" } : tracked;
+        var createdBefore = _factory.Created.Count;
+        var saveAttempted = false;
+        _saves.Next = (_, _) => { saveAttempted = true; return Task.CompletedTask; };
+        _commands.Sql.Clear();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.DeleteAsync(db, input));
+
+        Assert.That(failure!.Message, Does.Contain(nameof(StringRow)).And.Contain("Added"));
+        Assert.That(db.Entry(tracked).State, Is.EqualTo(EntityState.Added));
+        Assert.That(db.Entry(input).State, Is.EqualTo(detachedInput ? EntityState.Detached : EntityState.Added));
+        Assert.That(db.Entry(other).State, Is.EqualTo(EntityState.Added));
+        Assert.That(saveAttempted, Is.False);
+        Assert.That(_commands.Sql, Is.Empty);
+        Assert.That(_factory.Created.Count, Is.EqualTo(createdBefore));
+        Assert.That(db.AsyncDisposals, Is.Zero);
+    }
+
     [Test]
     public async Task BorrowedWritesValidateArgumentsBeforeUsingCallerResources()
     {

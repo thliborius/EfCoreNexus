@@ -291,6 +291,8 @@ values, even if current token values changed. Detached inputs supply expected
 tokens to the tracked target, including an already pending scalar update. A
 no-change detached edit of an unchanged row still asserts no version. Added or
 deleted tracked update inputs/targets are rejected instead of becoming upserts.
+Entity delete also rejects an `Added` target with `InvalidOperationException`
+before changing its state or saving, including detached input matching its key.
 
 Tracked entities receive generated keys/tokens after each successful save and can
 be edited again within the same context. Detached edits are not refreshed; reload
@@ -437,10 +439,10 @@ dotnet test --no-build --no-restore --logger 'trx;LogFileName=issue-11.trx' --re
 dotnet list package --vulnerable --include-transitive
 ```
 
-Restore and final build passed with zero build warnings/errors. All **160 tests
-passed**, zero failures/skips: 116 existing cases and **44 new cases**. The focused
-CRUD/transaction/concurrency run passed all **70 cases**. The new cases cover
-16 borrowed-write regressions, 10 SQLite transaction cases and 18 boundary/failure
+Restore and final build passed with zero build warnings/errors. All **162 tests
+passed**, zero failures/skips: 116 existing cases and **46 new cases**. The focused
+CRUD/transaction/concurrency run passed all **72 cases**. The new cases cover
+18 borrowed-write regressions, 10 SQLite transaction cases and 18 boundary/failure
 cases; see the sections above for contracts and limits. The audit found no known
 vulnerable packages in all four projects including transitives, using nuget.org.
 No package versions/dependencies changed; local package generation was disabled.

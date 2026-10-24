@@ -153,6 +153,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
     /// <summary>
     /// Deletes by key and expected CLR tokens without a database lookup, reusing any tracked instance.
     /// Tracked inputs retain original tokens; detached inputs supply expected tokens.
+    /// Added targets are rejected with InvalidOperationException before changing state or saving.
     /// Immediately saves the entire caller-owned tracker. Never owns its context or transaction.
     /// </summary>
     public virtual async Task DeleteAsync(TContext db, TEntity entity, CancellationToken ct = default)
@@ -170,6 +171,8 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
             target = db.ChangeTracker.Entries<TEntity>().FirstOrDefault(entry =>
                 key.GetKeyValueComparer().Equals(entry.Property(key.Name).CurrentValue, id)) ?? source;
         }
+        if (target.State == EntityState.Added)
+            throw new InvalidOperationException($"{typeof(TEntity).Name}: entity delete cannot delete an Added entity before it has been saved.");
         target.State = EntityState.Deleted;
         if (detached)
             foreach (var property in concurrency)
