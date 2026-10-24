@@ -966,3 +966,115 @@ The complete contract requires human approval in the PR for issue #6. No API is
 claimed approved merely by writing it here. The implementation plan proposes
 follow-up work only; this document authorizes no issue creation, merge, release,
 or deployment.
+
+## 8. Ownership foundation implemented in issue #8
+
+[Issue #8](https://github.com/thliborius/EfCoreNexus/issues/8) authorizes the first
+implementation step. The review/proposal wording above records the earlier API
+decision process; this section describes the limited implementation now present.
+
+### Reproduced inherited defects
+
+Before adding the ownership helper, the four
+[`LegacyContextOwnershipTests`](../EfCoreNexus.TestApp/EfCoreNexus.TestApp.Data.Tests/LegacyContextOwnershipTests.cs)
+passed against unchanged production code from `origin/v2` at `aac7bb7`, alongside
+all 17 existing tests. These are explicit **characterization tests of defects**,
+not assertions of the desired v2 behavior. Replace/remove them when the inherited
+API is replaced; do not preserve these defects to keep the tests green. Their
+fixture explicitly disposes the contexts that the old service leaks.
+
+| Finding / test | Reproduction and observed evidence |
+| --- | --- |
+| F1: `F1_PostCommitOperationReusesUndisposedContextAndNextBeginLeaksIt` | Begin, create/save, commit, dispose transaction, then read by ID. The read returns the same tracked entity instance; the selected context is unchanged, with one creation and zero context disposals. Another begin creates context #2 and replaces the reference without disposing #1. |
+| F3: `F3_BeginFailureLeavesContextSelectedAndUndisposed` | Inject a begin failure through EF's virtual `DatabaseFacade`. After the original exception and transaction cleanup, the created context remains selected with zero disposals. |
+| F3: `F3_DisposalFailureKeepsTransactionAndContextSelected` | Inject `IDbContextTransaction.DisposeAsync` failure. The original disposal exception escapes, the next begin still reports an open transaction, and the context remains referenced/undisposed. |
+| F4: `F4_RejectedNestedSampleBeginDisposesOuterTransactionAndRollsBackItsWrite` | Start an outer SQLite transaction and save an insert through the provider. Call the sample's `DeactivateAndCreate`; its nested begin is rejected, but its `finally` disposes the outer transaction. `CurrentTransaction` becomes null, outer commit reports no transaction, and a fresh context finds zero rows. The outer context is still undisposed. |
+
+F1/F4 use real SQLite transactions. F3 deliberately injects failures at the
+begin/disposal boundaries; it does not claim to reproduce a particular database
+outage. No permanently failing or skipped tests are introduced.
+
+Reproduce these observations with:
+
+```sh
+dotnet test --no-restore -p:GeneratePackageOnBuild=false --filter FullyQualifiedName~LegacyContextOwnershipTests
+```
+
+### Small internal building block; provider wiring deferred to #9
+
+[`ContextOperations`](../EfCoreNexus.Framework/Context/ContextOperations.cs) is an
+internal static helper with two `WithContextAsync` forms (Task and Task result).
+It accepts native `IDbContextFactory<TContext>` with only `TContext : DbContext`;
+all ownership state is local to each call. It awaits creation, passes the same
+token to the callback, awaits the callback, and always awaits `DisposeAsync` for
+an acquired context. It never saves or begins a transaction. Creation failures
+propagate without invoking the callback; a factory is responsible for any resource
+it allocates but fails to return.
+
+If the callback fails or is canceled, its original exception and stack propagate.
+A simultaneous disposal failure is attached to that exception under
+`Exception.Data["EfCoreNexus.DisposeAsyncException"]`. If disposal is the only
+failure, it propagates directly. There is no public diagnostics/exception API,
+retry policy, context cache, or mutable transaction state.
+
+The inherited `ProviderBase` still requires `TransactionService` and the existing
+provider factory constructs it through that constructor. Adding a second ownership
+mode now would create a temporary compatibility path and risk changing current
+transaction enlistment. As explicitly allowed by #8, the two protected provider
+methods will be wired to this tested internal code during the native-factory/DI
+rewrite in [#9](https://github.com/thliborius/EfCoreNexus/issues/9). No public layer
+is added now. Existing CRUD, transaction methods, and sample code retain their
+behavior, including the characterized defects until their planned replacement.
+
+Within the framework, custom queries use native EF and materialize before cleanup:
+
+```csharp
+// Internal building block, not a new consumer API:
+var rows = await ContextOperations.WithContextAsync(factory,
+    (db, token) => db.Set<Customer>().AsNoTracking()
+        .Where(customer => customer.Active).ToListAsync(token), ct);
+
+await ContextOperations.WithContextAsync(factory, async (db, token) =>
+{
+    db.Add(new Customer { Name = "Ada" });
+    await db.SaveChangesAsync(token); // Saving is the callback's explicit choice.
+}, ct);
+```
+
+The examples in section 3 show the eventual protected provider form. Do not return
+live `IQueryable`, streams, lazy-loading dependencies, or fire-and-forget work.
+The generic callback cannot prevent callers from retaining context-dependent
+objects; ownership and materialization remain part of its contract.
+
+[`ContextOperationsTests`](../EfCoreNexus.TestApp/EfCoreNexus.TestApp.Data.Tests/ContextOperationsTests.cs)
+exercises both forms across success, synchronous/asynchronous callback failure,
+creation failure/cancellation, cancellation while awaiting, disposal failure,
+combined failures, and delayed callback/disposal completion. It counts async/sync
+disposals and checks actual disposed-context behavior. SQLite tests verify no
+implicit save, explicit saves, and materialized results. Controlled overlap uses
+a shared in-memory database with separate connections and synchronization signals,
+not timing sleeps. Later calls after failure and overlap receive fresh contexts.
+
+The ownership foundation does not implement DI/model discovery (#9), CRUD/key/
+concurrency changes (#10), the transaction runner/borrowed writes (#11), or the
+sample migration (#12). SQLite coverage does not claim SQL Server behavior or
+Windows execution.
+
+### Validation for issue #8
+
+Executed on Linux with .NET SDK 10.0.113 / runtime 10.0.13 and EF Core 10.0.13:
+
+```sh
+dotnet restore
+dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
+dotnet build --no-restore -p:GeneratePackageOnBuild=false --verbosity minimal
+dotnet test --no-build --no-restore --logger 'console;verbosity=normal' --logger 'trx;LogFileName=issue-8.trx' --results-directory /tmp/efcorenexus-issue-8-results --verbosity minimal
+dotnet list package --vulnerable --include-transitive
+```
+
+Restore and build succeeded (zero build warnings/errors). All **45 tests passed**:
+17 unchanged existing tests, four inherited-defect characterizations, and 24
+ownership cases; zero failures/skips. The focused helper run also passed all 24
+cases. The audit reported no known vulnerable packages across all four projects
+using nuget.org, including transitive dependencies. Local package generation was
+disabled for the build; nothing was published.
