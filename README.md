@@ -116,10 +116,14 @@ From a fresh checkout with the .NET 10 SDK:
 
 ```sh
 dotnet restore
+dotnet tool restore
 dotnet build -p:GeneratePackageOnBuild=false
 dotnet test --no-build
 dotnet run --project EfCoreNexus.TestApp/EfCoreNexus.TestApp --launch-profile http
 ```
+
+`dotnet tool restore` uses `.config/dotnet-tools.json` for the pinned local
+`dotnet-ef`; no global installation is needed. Run the commands from the repository root.
 
 Open http://localhost:5031. No SQL Server, credentials or extra UI framework is
 needed. SQLite creates `efcorenexus.db` in the web project's content directory.

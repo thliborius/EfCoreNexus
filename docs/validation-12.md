@@ -60,3 +60,23 @@ infrastructure. Existing CI runs build/tests/audit. EF model scripting was verif
 the available GitHub credential lacks workflow scope, so the proposed CI tooling
 step could not be pushed and the existing workflow is unchanged. CI's final
 result is reported in the PR/completion report.
+
+## Local tool manifest follow-up
+
+The unchanged EF tool manifest is stored at `.config/dotnet-tools.json`, the
+standard local discovery location. README and sample tooling commands use
+`dotnet tool restore` from the repository root without an explicit manifest path
+or a global `dotnet-ef` installation.
+
+Verified on Linux / SDK 10.0.113 in a fresh temporary Git clone with an isolated
+`DOTNET_CLI_HOME` and no global tools: `dotnet ef` was unavailable before restore;
+`dotnet tool restore`, `dotnet ef --version` (10.0.13), and the documented
+`dbcontext info`, `dbcontext script`, `migrations add Initial` and `database update`
+commands succeeded. Migration files and the SQLite database were created only in
+the temporary checkout. Restore/build passed with zero build warnings/errors,
+all 122 tests passed, and the transitive dependency audit found no known
+vulnerabilities. The manifest is also discovered from a nested project directory.
+
+Open release point: `EfCoreNexus.Framework.csproj` still declares version `1.0.5`
+and `GeneratePackageOnBuild=True`. Review both before releasing v2; this tooling
+correction changes neither setting nor any package/tool version.

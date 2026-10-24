@@ -14,7 +14,10 @@ is required. Relative SQLite paths are relative to the process working directory
 use an absolute `Data Source` when running commands from different directories.
 `dotnet run --project` starts in the web project directory.
 
-The checked-in local tool manifest pins EF tools to the EF package version:
+The checked-in `.config/dotnet-tools.json` pins EF tools to the EF package
+version. Run these commands from the repository root after `dotnet restore`:
+`dotnet tool restore` discovers the manifest automatically, and `dotnet ef` uses
+the restored local tool. No global `dotnet-ef` installation is required.
 
 ```sh
 dotnet tool restore
