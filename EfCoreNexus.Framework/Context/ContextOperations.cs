@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreNexus.Framework.Context;
 
-// Internal until ProviderBase moves from TransactionService to the native factory.
+// Shared ownership implementation for the native provider base.
 internal static class ContextOperations
 {
     internal static Task WithContextAsync<TContext>(

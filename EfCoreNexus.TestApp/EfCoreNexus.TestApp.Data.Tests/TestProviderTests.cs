@@ -7,6 +7,7 @@ using EfCoreNexus.TestApp.Data.Entities;
 using EfCoreNexus.TestApp.Data.Provider;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using LegacyProviders = EfCoreNexus.Framework.Legacy.Provider;
 
 namespace EfCoreNexus.TestApp.Data.Tests
 {
@@ -257,7 +258,7 @@ namespace EfCoreNexus.TestApp.Data.Tests
             await Assert.ThrowsAsync<Exception>(async () => await _dataService.CommitTransaction());
         }
 
-        private class FakeProvider(TransactionService<MainContext> transactionSvc) : ProviderBase<FakeEntity, Guid, MainContext>(transactionSvc);
+        private class FakeProvider(TransactionService<MainContext> transactionSvc) : LegacyProviders.ProviderBase<FakeEntity, Guid, MainContext>(transactionSvc);
 
         private class FakeEntity : IEntity;
     }

@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
 using EfCoreNexus.Framework.Context;
+using EfCoreNexus.Framework.Provider;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreNexus.TestApp.Data.Tests;
 
-public class ContextOperationsTests
+[TestFixture(false)]
+[TestFixture(true)]
+public class ContextOperationsTests(bool throughProvider)
 {
     [TestCase(false)]
     [TestCase(true)]
@@ -198,7 +201,7 @@ public class ContextOperationsTests
         var firstEntered = Signal();
         var secondEntered = Signal();
         var release = Signal();
-        var first = ContextOperations.WithContextAsync(factory, async (db, token) =>
+        var first = WithContextAsync(factory, async (db, token) =>
         {
             await db.Database.OpenConnectionAsync(token);
             var rows = await db.Set<Row>().AsNoTracking().ToListAsync(token);
@@ -206,7 +209,7 @@ public class ContextOperationsTests
             await release.Task;
             return rows;
         });
-        var second = ContextOperations.WithContextAsync(factory, async (db, token) =>
+        var second = WithContextAsync(factory, async (db, token) =>
         {
             await db.Database.OpenConnectionAsync(token);
             Assert.That(await db.Set<Row>().CountAsync(token), Is.EqualTo(1));
@@ -228,7 +231,7 @@ public class ContextOperationsTests
             await Task.WhenAll(first, second);
         }
         Assert.That((await first).Single().Name, Is.EqualTo("shared"));
-        await ContextOperations.WithContextAsync(factory, (_, _) => Task.CompletedTask);
+        await WithContextAsync(factory, (_, _) => Task.CompletedTask);
         Assert.That(factory.Created, Has.Count.EqualTo(3));
         AssertDisposed(factory.Created);
     }
@@ -264,26 +267,46 @@ public class ContextOperationsTests
     public async Task LaterCallAfterCallbackAndDisposalFailureGetsFreshContext()
     {
         var factory = new ObservedFactory { DisposalFailure = new InvalidOperationException("dispose failed") };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => ContextOperations.WithContextAsync(factory,
+        await Assert.ThrowsAsync<InvalidOperationException>(() => WithContextAsync(factory,
             (_, _) => FailCallbackAsync(new InvalidOperationException("callback failed"))));
         factory.DisposalFailure = null;
 
-        var result = await ContextOperations.WithContextAsync(factory, (_, _) => Task.FromResult(42));
+        var result = await WithContextAsync(factory, (_, _) => Task.FromResult(42));
         Assert.That(result, Is.EqualTo(42));
         Assert.That(factory.Created, Has.Count.EqualTo(2));
         Assert.That(factory.Created.First(), Is.Not.SameAs(factory.Created.Last()));
         AssertDisposed(factory.Created);
     }
 
-    private static Task InvokeAsync(ObservedFactory factory, bool returnsResult,
+    private Task InvokeAsync(ObservedFactory factory, bool returnsResult,
         Func<ObservedContext, CancellationToken, Task> operation, CancellationToken ct = default)
         => returnsResult
-            ? ContextOperations.WithContextAsync(factory, async (db, token) =>
+            ? WithContextAsync(factory, async (db, token) =>
             {
                 await operation(db, token);
                 return 42;
             }, ct)
+            : WithContextAsync(factory, operation, ct);
+
+    // Run the issue #8 contract against both the internal helper and the actual provider surface.
+    private Task WithContextAsync(ObservedFactory factory,
+        Func<ObservedContext, CancellationToken, Task> operation, CancellationToken ct = default)
+        => throughProvider ? new OwnershipProvider(factory).RunAsync(operation, ct)
             : ContextOperations.WithContextAsync(factory, operation, ct);
+
+    private Task<TResult> WithContextAsync<TResult>(ObservedFactory factory,
+        Func<ObservedContext, CancellationToken, Task<TResult>> operation, CancellationToken ct = default)
+        => throughProvider ? new OwnershipProvider(factory).RunAsync(operation, ct)
+            : ContextOperations.WithContextAsync(factory, operation, ct);
+
+    private sealed class OwnershipProvider(IDbContextFactory<ObservedContext> factory)
+        : ProviderBase<Row, int, ObservedContext>(factory)
+    {
+        public Task RunAsync(Func<ObservedContext, CancellationToken, Task> operation, CancellationToken ct)
+            => WithContextAsync(operation, ct);
+        public Task<TResult> RunAsync<TResult>(Func<ObservedContext, CancellationToken, Task<TResult>> operation,
+            CancellationToken ct) => WithContextAsync(operation, ct);
+    }
 
     private static async Task FailCallbackAsync(Exception failure)
     {
