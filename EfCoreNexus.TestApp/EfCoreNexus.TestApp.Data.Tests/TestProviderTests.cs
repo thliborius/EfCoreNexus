@@ -133,7 +133,7 @@ namespace EfCoreNexus.TestApp.Data.Tests
 
             await p.Create(newEntity, newEntity.TestId);
 
-            Assert.ThrowsAsync<Exception>(async () => await p.Create(newEntity, newEntity.TestId));
+            await Assert.ThrowsAsync<Exception>(async () => await p.Create(newEntity, newEntity.TestId));
         }
 
         [Test]
@@ -206,7 +206,7 @@ namespace EfCoreNexus.TestApp.Data.Tests
 
             await p.Delete(newEntity.TestId);
 
-            Assert.ThrowsAsync<Exception>(async () => await p.Update(newEntity, newEntity.TestId));
+            await Assert.ThrowsAsync<Exception>(async () => await p.Update(newEntity, newEntity.TestId));
         }
 
         [Test]
@@ -254,7 +254,7 @@ namespace EfCoreNexus.TestApp.Data.Tests
                 await _dataService.DisposeTransaction();
             }
 
-            Assert.ThrowsAsync<Exception>(async () => await _dataService.CommitTransaction());
+            await Assert.ThrowsAsync<Exception>(async () => await _dataService.CommitTransaction());
         }
 
         private class FakeProvider(TransactionService<MainContext> transactionSvc) : ProviderBase<FakeEntity, Guid, MainContext>(transactionSvc);
