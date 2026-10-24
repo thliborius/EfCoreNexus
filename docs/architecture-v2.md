@@ -18,13 +18,19 @@ fixtures were inspected for that original proposal. Section 1 retains its
 historical findings and test evidence; sections 2–7 now align with the selected
 contract below. Code links refer to the unchanged source baseline.
 
+Issue #6 starts from current `origin/v2` at `964a9d1`, which merged PR #5.
+GitHub contains no separate submitted reviews or inline comments for PR #5;
+its proposal and PR description provide the recorded review questions. This pass
+resolves those questions into the recommendations below and keeps issue #6 open
+for human review.
+
 ## 0. v2 API decisions
 
 **Less boilerplate. More Entity Framework.** The initial v2 scope is typed CRUD
 providers, opt-in registration, and an optional transaction callback. Native EF
 remains usable on its own. No mandatory repository, session, or application layer
 is introduced. The table records the final recommendations from this decision
-pass; the two remaining review choices are isolated in section 7.
+pass; implementation details still needing validation are isolated in section 7.
 
 | Decision | Keep / remove / add | Trade-off and migration impact | Implementation order |
 | --- | --- | --- | --- |
@@ -33,7 +39,7 @@ pass; the two remaining review choices are isolated in section 7.
 | Automatic registration | Add two opt-in helpers, `AddNexusProviders<TContext>` and `RegisterNexusEntities`, in the initial scope | Configure assemblies/model boundaries once; no DI or `DbSet` edits for each new type within them. Small bounded reflection cost; no new scanning package. | 2: DI/model |
 | Context/model/tooling | Use native factories, `DbContext`, `IEntityTypeConfiguration<T>`, and configuration scanning; remove required custom base/factory/configuration hierarchy | Port model setup and preserve mappings. `IEntity` survives only as an optional discovery marker; no provider constraint. Design-time factory only when EF tooling needs one. | 2: DI/model |
 | CRUD and keys | Async/cancelable reads, create, entity update, **ID delete**, and entity delete; single CLR `Guid`/`int`/`string` key via EF metadata | Generated keys work; no separate create/update ID. ID delete does not require a UI entity. Entity delete carries expected concurrency values. No Dynamic LINQ or generic graph merge. | 3: CRUD/concurrency |
-| Transactions | Add optional stateless `TransactionRunner<TContext>` and context-first CRUD overloads | All writes save immediately; runner also saves once before commit. Passing the context is explicit and doubles six CRUD signatures. No ambient enlistment; native EF is preferable for one save. | 4: runner |
+| Transactions | Add optional stateless `TransactionRunner<TContext>` and four context-first write overloads | All writes save immediately; runner also saves once before commit. Four extra write signatures; reads on an existing context stay native EF. No ambient enlistment; native EF is preferable for one save. | 4: runner |
 | Deferred conveniences | Exclude compatibility facade, generalized keys, paging DSL, pooling helper, source generator, retry/nesting/savepoint infrastructure | Native EF remains the route for advanced requirements. No speculative public surface or dependencies. | Later only with a concrete use case |
 
 ### Exact proposed surface
@@ -52,12 +58,10 @@ Task DeleteAsync(TEntity entity, CancellationToken ct = default);
 ```
 
 Each ordinary call creates and asynchronously disposes its own context. The base
-also exposes exactly these six context-first virtual overloads; they are **not**
+also exposes exactly these four context-first virtual write overloads; they are **not**
 on the context-independent CRUD interface:
 
 ```csharp
-Task<List<TEntity>> GetAllAsync(TContext db, CancellationToken ct = default);
-Task<TEntity?> GetByIdAsync(TContext db, TId id, CancellationToken ct = default);
 Task CreateAsync(TContext db, TEntity entity, CancellationToken ct = default);
 Task UpdateAsync(TContext db, TEntity entity, CancellationToken ct = default);
 Task DeleteAsync(TContext db, TId id, CancellationToken ct = default);
@@ -65,8 +69,8 @@ Task DeleteAsync(TContext db, TEntity entity, CancellationToken ct = default);
 ```
 
 Borrowed calls never create/dispose a context or begin/commit/roll back a
-transaction. Writes call `SaveChangesAsync` on **the entire supplied tracker**;
-reads do not save. The caller owns that unit of work. For specialized methods the
+transaction. Writes call `SaveChangesAsync` on **the entire supplied tracker**.
+The caller owns that unit of work. For specialized methods the
 base supplies only two protected ownership helpers:
 
 ```csharp
@@ -92,6 +96,26 @@ The runner owns a fresh context and async transaction per invocation, awaits the
 callback, saves remaining changes, commits, and disposes both resources. Section 4
 defines rollback/failure handling and the limits of immediate saves. Sections 2
 and 3 specify registration signatures, CRUD semantics, and consumer examples.
+
+### Why each retained member earns its place
+
+| Member / abstraction | Recurring benefit and boundary |
+| --- | --- |
+| `GetAllAsync` / `GetByIdAsync` | Materialize common reads and close the operation context. Keep lists for small sets only; no paging/query DSL. |
+| `CreateAsync` | Remove repeated add/save/dispose code; EF still generates keys and enforces constraints. |
+| `UpdateAsync` | Remove repeated scalar read/compare/save work for simple edit forms. Limited to the documented scalar/token contract, not an aggregate editor. |
+| `DeleteAsync(id)` | A list/delete button needs only its key; callers need no entity or tracker. |
+| `DeleteAsync(entity)` | A caller already holding an edit snapshot can request token-aware deletion with one call. Retain rather than requiring repeated attach/original-value code. |
+| Four borrowed write overloads | Reuse those write contracts in one explicit transaction; they save on the entire shared tracker. No borrowed read overloads: `db.Set<T>()` already removes the context-ownership boilerplate. |
+| `ProviderBase` / optional `IProviderCrud` | Share the six ordinary operations and allow substitution without requiring a custom interface per provider. No automatic interface-to-provider selection. |
+| Two protected `WithContextAsync` forms | Close owned contexts around custom commands/queries without repeating conditional disposal. No implicit save or deferred results. |
+| Two discovery helpers / optional `IEntity` marker | Remove per-type registration edits within one explicit boundary; native configuration remains native. |
+| Optional `TransactionRunner` with one callback | Centralize multi-save cleanup; use native EF when one save suffices. No session, result, transaction handle, or options hierarchy. |
+
+Remove borrowed read methods, native configuration/factory wrappers, extra key
+APIs, patch/graph methods, and compatibility lookup methods from the proposed
+core: their native alternatives are already short or their recurring value has
+not been demonstrated. No public API is added solely for future flexibility.
 
 ## 1. Assessment of the current architecture
 
@@ -410,9 +434,9 @@ public Task<List<Customer>> GetActiveAsync(CancellationToken ct = default)
 ```
 
 This replaces the v1 manual try/finally. To enlist the custom query in a shared
-operation, add `GetActiveAsync(MainContext db, CancellationToken ct = default)`
-containing that same LINQ with `db`/`ct`; the ordinary method can delegate to it
-through `WithContextAsync`. No separate query abstraction is needed.
+operation, use that LINQ directly on the supplied context. A custom provider may
+offer its own context-taking method if the query is reused there; the base class
+does not add borrowed read overloads for this. No separate query abstraction is needed.
 Never return an `IQueryable`, lazy
 loading dependency, or unconsumed stream from an owned context. Materialize within
 its lifetime; use native factory ownership explicitly for streaming.
@@ -455,6 +479,12 @@ is a full scalar edit, not a patch: omitted/default fields are still supplied
 values and may overwrite current data. Use a specialized method for allowed-field
 updates. A no-change update need not issue SQL, so it is not a stale-version check.
 
+Create uses native `Add` semantics, including reachable new entities; delete
+follows EF/database cascade configuration. The scalar-only restriction above is
+the generic update contract, not a replacement for native relationship behavior.
+Handle aggregate graphs explicitly in specialized providers when their rules
+require more than those native operations.
+
 The detached entity must carry every configured original CLR concurrency token
 from the read shown to the user, **unchanged** by the UI. This applies equally to
 entity delete. Reloading the latest token first defeats stale-edit detection.
@@ -483,6 +513,31 @@ expected values because deletion needs no renewal. Reject unsupported shadow
 tokens (and application-managed tokens on generic update) with
 `InvalidOperationException` before writing, rather than inventing token handling.
 
+For SQLite or an application-managed token, an allowed-field operation stays
+short with native EF. For example, add a `Guid Revision` initialized for inserts
+to `Customer` and map it with `.IsConcurrencyToken()`. This custom method belongs
+inside `CustomerProvider`; the caller passes the revision from its original read:
+
+```csharp
+public Task RenameAsync(Guid id, string name, Guid expectedRevision,
+    CancellationToken ct = default)
+    => WithContextAsync(async (db, token) =>
+    {
+        var customer = await db.Set<Customer>()
+            .SingleOrDefaultAsync(x => x.Id == id, token)
+            ?? throw new KeyNotFoundException();
+        db.Entry(customer).Property(x => x.Revision).OriginalValue = expectedRevision;
+        customer.Name = name;
+        customer.Revision = Guid.NewGuid();
+        await db.SaveChangesAsync(token);
+    }, ct);
+```
+
+This explicitly distinguishes the expected and new token without adding a
+generic updater, token factory, patch object, or merge strategy. Simple entities
+without tokens can use the ordinary scalar update; SQL Server rowversion uses
+the store-generated-token contract above.
+
 Standard failures: null arguments → `ArgumentNullException`; unsupported key or
 token mapping / mismatched `TId` → `InvalidOperationException` naming the mapping;
 missing update at lookup → `KeyNotFoundException`; later update/delete races →
@@ -498,6 +553,68 @@ and forward cancellation to creation, queries, saves, and transaction operations
 Avoid `Task.Run` / `Task.FromResult` around sync database calls. Providers may
 honor cancellation differently; cancellation does not establish commit outcome.
 See [EF async guidance](https://learn.microsoft.com/en-us/ef/core/miscellaneous/async).
+
+### Blazor list/delete example
+
+For a small administration list in an app configured for Interactive Server,
+the component can inject its provider directly. Initialization only reads, so
+prerendering cannot duplicate writes. The component owns cancellation, while the
+provider owns each operation's context:
+
+```razor
+@page "/customers"
+@using Microsoft.EntityFrameworkCore
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@implements IDisposable
+@inject CustomerProvider Customers
+
+@foreach (var customer in customers)
+{
+    <p @key="customer.Id">@customer.Name
+        <button disabled="@busy" @onclick="() => DeleteAsync(customer.Id)">Delete</button>
+    </p>
+}
+<p>@message</p>
+
+@code {
+    private readonly CancellationTokenSource lifetime = new();
+    private List<Customer> customers = [];
+    private bool busy;
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { customers = await Customers.GetAllAsync(lifetime.Token); }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        if (busy) return;
+        busy = true;
+        message = "";
+        try
+        {
+            await Customers.DeleteAsync(id, lifetime.Token);
+            customers = await Customers.GetAllAsync(lifetime.Token);
+        }
+        catch (DbUpdateConcurrencyException) { message = "Changed while deleting. Reload the list."; }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+
+    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+}
+```
+
+This button deliberately deletes the current row by ID. An edit form that must
+assert the version displayed to the user instead passes its unchanged token via
+`DeleteAsync(customer, ct)` or `UpdateAsync(customer, ct)` and catches
+`DbUpdateConcurrencyException`. After a successful update, reload the entity to
+refresh store-generated values before another edit. The loading flag suppresses
+duplicate clicks; correctness across components comes from separate operation
+contexts and the database's concurrency checks.
 
 ## 4. Transaction ownership and Blazor concurrency
 
@@ -557,13 +674,14 @@ await Transactions.ExecuteAsync(async (db, token) =>
 }, ct);
 ```
 
-Recommend **explicit-context overloads** of the same CRUD methods, with `TContext`
+Recommend four **explicit-context write overloads**, with `TContext`
 as the first argument. They borrow the context: they never create, dispose,
 commit, or roll it back. Writes save immediately, as the ordinary methods do,
 but those saves are enclosed by the runner's transaction. They can flush any
 other pending changes on that same tracker. Specialized business methods need
 the same explicit-context path when they participate in a shared operation;
-ordinary overloads can delegate to it through `WithContextAsync`.
+the ordinary base write methods delegate to their borrowed overloads through
+`WithContextAsync`, so overrides do not require two implementations.
 
 This choice preserves one save contract for ordinary and borrowed writes and
 makes generated IDs available to the next call. It does **not** isolate each
@@ -573,7 +691,7 @@ the transaction. Only pass a context whose entire pending state belongs to the
 same business operation. For precise staging/save boundaries, use native EF
 on that context and call `SaveChangesAsync` explicitly. Do not add an auto-save
 switch, per-entry save emulation, or differently timed overloads with the same
-name. Section 7 asks reviewers to weigh this against using native EF alone.
+name. Native EF remains preferable when explicit staging is simpler.
 
 The runner's proposed core signature is
 `Task ExecuteAsync(Func<TContext, CancellationToken, Task> operation, CancellationToken ct = default)`.
@@ -583,9 +701,16 @@ ordinary provider overload in the callback creates an independent operation;
 it does **not** join the transaction. This explicit-context requirement is the
 main usability cost and must be visible in XML documentation and examples.
 
-For borrowed-context reads, list reads remain no-tracking; `GetByIdAsync(db,...)`
-uses native `FindAsync` and may return a tracked instance, including local changes.
-The borrower must not detach it. No promise of database-fresh reads is made.
+A successful provider save inside the callback is not a committed business
+operation. If the transaction later rolls back, discard its in-memory entities;
+rollback does not undo assigned keys, refreshed tokens, or tracker state.
+
+There are no borrowed-context read methods on the base. Use
+`db.Set<Customer>().AsNoTracking().Where(...).ToListAsync(token)` or
+`db.Set<Customer>().FindAsync(new object?[] { id }, token)` directly. Native
+`FindAsync` may return a tracked instance, including local changes; it does not
+promise a database-fresh read. Read convenience is earned when the provider
+creates/disposes the context, not when the caller already holds one.
 
 ### Required lifetime and failure behavior
 
@@ -627,16 +752,13 @@ an advanced application concern. A failed workflow should unwind; swallowing a
 provider exception inside a callback and continuing is not a supported recovery
 pattern. See [native transaction behavior and limitations](https://learn.microsoft.com/en-us/ef/core/saving/transactions).
 
-Recommend an initial **single-attempt runner**, without hidden delegate replay.
-When a retrying EF execution strategy is configured, the application must wrap
-the **whole runner invocation** in `Database.CreateExecutionStrategy().ExecuteAsync(...)`,
-creating a fresh runner-owned context/transaction on every attempt. Calling the
-runner directly under such a strategy is unsupported and EF may reject the user
-transaction. Keep callbacks replay-safe and construct mutable entities per attempt;
-external HTTP/email/payment effects must not be replayed as database work.
-Commit ambiguity still needs application-specific verification/idempotency.
-Automatic strategy integration can be reviewed later if the explicit composition
-is too cumbersome. See [EF execution strategies](https://learn.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency#execution-strategies-and-transactions).
+Recommend a **single-attempt runner**, without hidden delegate replay. A retrying
+EF execution strategy can reject a user transaction unless the application wraps
+the **whole runner invocation** in the native strategy, with fresh contexts and
+mutable entities per attempt. Callbacks must be replay-safe; external effects and
+unknown commit outcomes need application-specific handling. No retry integration
+or exactly-once promise is part of this API. See
+[EF execution strategies](https://learn.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency#execution-strategies-and-transactions).
 
 ### Alternatives considered
 
@@ -644,7 +766,7 @@ is too cumbersome. See [EF execution strategies](https://learn.microsoft.com/en-
 | --- | --- |
 | Keep ambient scoped `TransactionService`, add reset/dispose | Repairs F1/F3 but leaves accidental enlistment and overlapping components. Locking an entire circuit would serialize unrelated operations and still hide ownership. Not recommended. |
 | Explicit disposable UnitOfWork with `GetProvider<T>()` | Clear lifetime, but needs a provider rebinding/factory/resolver API and explicit commit/disposal ceremony. Consider only if passing contexts proves harder for real consumers. |
-| Callback plus explicit `TContext` overloads | Reuses typed DI providers and EF, makes shared ownership visible, and centralizes cleanup. Recommended despite extra overloads and the need to pass the context. |
+| Callback plus four explicit `TContext` write overloads | Reuses typed DI providers and EF, makes shared ownership visible, and centralizes cleanup. Recommended for multi-save work despite extra overloads and the need to pass the context. Borrowed reads stay native. |
 | Native factory/context/transaction only | Fewest library concepts and full control. Always supported; for one save, usually preferable. The runner should survive only if it removes recurring failure-handling code. |
 
 ### Consumer ceremony compared with native EF
@@ -699,7 +821,7 @@ await db.SaveChangesAsync(ct); // Atomic through native EF transaction behavior.
 | CRUD | Gateway lookup, separate create/update ID; manual transaction state | Ownership + native find/add/edit/remove/save | Six async methods hide repeated ownership; keep ID delete; entity token contract costs explanation |
 | Custom LINQ | Manual conditional try/finally | Short ownership + awaited query | `WithContextAsync` removes ownership boilerplate; same LINQ |
 | Two related inserts, one save | Shared mutable transaction gateway | Shortest: tracked graph + one save | Choose native EF; no runner required |
-| Multi-provider / multi-save | Implicit enlistment; unsafe cleanup | Explicit transaction + error/cleanup handling | Callback centralizes cleanup; context must be passed, writes flush tracker; six extra overloads |
+| Multi-provider / multi-save | Implicit enlistment; unsafe cleanup | Explicit transaction + error/cleanup handling | Callback centralizes cleanup; context must be passed, writes flush tracker; four extra write overloads |
 
 No throughput or line-count benchmark is claimed. The examples demonstrate
 where convenience removes recurring code and where ordinary EF wins. See
@@ -784,7 +906,7 @@ All retain the .NET/EF10 baseline and platform-neutral SQLite default tests.
 | 1 — P0: Capture ownership regressions and add owned-operation helper | Reproduce F1/F3/F4 before replacement: post-commit reuse/leak, begin failure, rejected nested begin, cleanup exceptions. Count created/disposed resources and preserve initiating exceptions. Test both `WithContextAsync` forms: fresh context per call, callback failure/cancellation disposal, no implicit save, no deferred results in examples. Controlled overlap uses distinct connections to a shared SQLite database. |
 | 2 — P1: Native model/factory setup and opt-in DI discovery (after 1) | Replace the custom factory/configuration chain. Test constructor dependencies, DI validation/disposal, indirect inheritance, idempotent scans, conflicting descriptors, two contexts in one assembly with predicates, all exclusions, marker-only entities, configuration-only entities, and native configuration overrides. Adding an entity/provider within the configured boundary needs no startup edit. Runtime/design-time models match. |
 | 3 — P1: Async CRUD, metadata keys, and concurrency (after 1–2) | Compile consumer calls for all six ordinary methods/interface mappings. Test convention/Fluent `Guid`/`int`/`string` and generated keys, cancellation, unsupported keys/tokens/type mismatch, database duplicate constraints, null reads, missing updates, ID-delete no-op, entity-delete missing/stale conflict, and lookup/save races. Verify scalar-only changes, no key/generated-column overwrite, tracked identity reuse, no-change update behavior, and full-edit defaults. SQLite uses explicit original/new application-managed token operations for stale updates and generic entity-delete token tests; add focused SQL Server `rowversion` coverage before claiming that provider behavior. Remove Dynamic LINQ only when no framework use remains. |
-| 4 — P0: Optional runner and borrowed-context overloads (after 3 and review choice 1) | Verify all six borrowed signatures. Two providers commit/roll back together; ordinary calls inside the callback remain independent. Assert immediate tracker-wide saves, generated keys between calls, final-save behavior, and borrowed resources never disposed by providers. Cover create/begin/callback/save/commit/cancellation/rollback/disposal failures and preserve initiating exceptions. Distinguish known commit success from unknown outcome. Overlapping runner calls use fresh contexts; a later call after failure works. Explicit execution-strategy composition must prove fresh resources/entities per attempt before retry-enabled use is advertised. |
+| 4 — P0: Optional runner and four borrowed write overloads (after 3) | Verify the four borrowed write signatures; shared reads stay native EF. Two providers commit/roll back together; ordinary calls inside the callback remain independent. Assert immediate tracker-wide saves, generated keys between calls, final-save behavior, and borrowed resources never disposed by providers. Cover create/begin/callback/save/commit/cancellation/rollback/disposal failures and preserve initiating exceptions. Distinguish known commit success from unknown outcome. Overlapping runner calls use fresh contexts; a later call after failure works. Explicit execution-strategy composition must prove fresh resources/entities per attempt before retry-enabled use is advertised. |
 | 5 — P1: Migration and consumer proof (after 2–4) | Port sample to actual Interactive Server without write-on-prerender initialization; compile/run the setup, CRUD including ID delete, custom LINQ, native single-save, and two-provider examples. Use one runtime/tooling configuration, no hard-coded secrets or MARS suppression. Verify build/test and model creation on Windows/Linux; document macOS CLI requirements. Keep WebAssembly behind a server API and mark it unproven until demonstrated. Publish no package as part of these issues without separate authorization. |
 
 Compatibility adapters, generalized keys, pooling/paging helpers and source
@@ -807,30 +929,40 @@ runner/helper surface grows beyond that benefit, ship fewer helpers instead.
 No CQRS, MediatR, event bus, generic cache, custom query language, or new service
 hierarchy is recommended.
 
-### Remaining human review choices
+### Recommendation settled for API review
 
-Only two trade-offs remain open; the recommended side is reflected consistently
-in sections 0–6 so reviewers can assess a concrete API:
+Retain entity delete and the optional runner with **four borrowed write
+overloads**. Entity delete removes repeated token-aware attach/remove code;
+the runner removes repeated multi-save cleanup. Drop the two proposed borrowed
+read overloads: native reads on a context are already straightforward. Keep
+immediate whole-tracker provider saves and the runner's final save explicit.
+Native EF only for shared workflows remains the smaller alternative if reviewers
+judge the runner's limited benefit insufficient; do not replace it with a session
+framework or save-mode switches. Omitting entity delete would save two signatures
+but push its repeated concurrency handling into every consuming provider.
 
-1. **Runner convenience versus surface/save cost.** Recommend the one callback
-   plus six borrowed overloads, with immediate whole-tracker saves and a final
-   runner save. This removes repeated cleanup for multi-save workflows but
-   requires discipline about staged changes. The focused alternative is **native
-   EF only for shared workflows**, dropping the runner and six borrowed public
-   overloads while keeping ordinary providers. Choose that if real consumers
-   gain too little from the callback. Do not substitute a session framework,
-   auto-save flags, or implicit staging semantics without a new review.
-2. **Entity-delete convenience.** Recommend retaining the entity overload for
-   expected-token deletion, with missing/stale rows raising
-   `DbUpdateConcurrencyException`. Alternatively omit it initially and put
-   token-aware deletion in a specialized provider; this reduces one ordinary and
-   one borrowed signature. **ID delete stays first-class in both alternatives**,
-   with initial missing-row no-op and no client-version guarantee.
+Direct DI, native context/configuration primitives, initial opt-in automation,
+metadata single-key CRUD, and no compatibility adapter are also selected
+recommendations. No additional feature is implied by a future use case.
 
-Direct DI, native context/configuration primitives, opt-in automation in the
-initial scope, metadata single-key CRUD, and no compatibility adapter are the
-selected recommendations, not additional unresolved alternatives. The complete
-contract still requires human approval in the PR for issue #6; no API is claimed
-approved merely by writing it here. Review choices must be resolved before their
-dependent implementation issues begin. No implementation issues, merge, release,
-or deployment are authorized by this document.
+### Open technical details for implementation
+
+These do not add methods or change the selected ownership/save contract:
+
+1. **Scalar eligibility tests.** Pin down the minimal EF metadata checks for
+   writable CLR scalars, including save behavior, converters, backing fields and
+   store-generated properties. Prefer EF entry/property metadata to custom
+   reflection rules. Restrict unsupported mappings explicitly instead of adding
+   graph traversal, custom mapping annotations, or a general update engine.
+   The default must not overwrite keys/generated values or silently ignore an
+   unsupported concurrency token. Validate this before implementing generic update.
+2. **Cleanup diagnostics and budget.** Choose a small internal rollback timeout
+   and how secondary cleanup errors/known commit success are attached to the
+   initiating exception, e.g. standard `Exception.Data` versus existing logging.
+   Prefer no new dependency or public diagnostics/options/exception hierarchy.
+   Test cancellation and multiple failures before finalizing the internal policy.
+
+The complete contract requires human approval in the PR for issue #6. No API is
+claimed approved merely by writing it here. The implementation plan proposes
+follow-up work only; this document authorizes no issue creation, merge, release,
+or deployment.
