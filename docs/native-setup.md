@@ -5,9 +5,9 @@ once. An eligible new entity or concrete provider inside it needs no per-type DI
 registration or `DbSet` property. Discovery is optional; native EF registration
 and model building remain available.
 
-This page describes implemented setup, ordinary async CRUD (#10), and custom
-operations. Shared-context writes and `TransactionRunner` follow in #11.
-The complete future API remains in [architecture-v2.md](architecture-v2.md).
+This page describes implemented setup, ordinary async CRUD (#10), custom
+operations, and optional shared-context transactions (#11). The design and
+trade-offs remain in [architecture-v2.md](architecture-v2.md).
 
 ## Before and after
 
@@ -223,6 +223,121 @@ public Task RenameAsync(int id, string name, Guid expectedRevision,
 This example assumes `Customer` also maps a `Guid Revision` as a concurrency
 token. There is no generic merge, patch, token factory or graph updater.
 
+## Optional multi-provider transactions
+
+For operations that need only one save, use a native factory context and
+`SaveChangesAsync`: EF already supplies the transaction. For several immediate
+provider saves, the optional `EfCoreNexus.Framework.Services.TransactionRunner<TContext>`
+removes repeated begin/rollback/cleanup code. Register it explicitly if needed:
+
+```csharp
+services.AddScoped<TransactionRunner<MainContext>>();
+
+// Customers, Orders and Transactions are injected concrete services.
+await Transactions.ExecuteAsync(async (db, token) =>
+{
+    var customer = new Customer("Ada");
+    await Customers.CreateAsync(db, customer, token); // Saves now; generated Id is available.
+    await Orders.CreateAsync(db, new Order { CustomerId = customer.Id }, token);
+    db.Add(new AuditEntry { Message = "Customer and order created" }); // Runner's final save.
+}, ct);
+```
+
+The runner accepts `IDbContextFactory<TContext>` and exposes only
+`Task ExecuteAsync(Func<TContext, CancellationToken, Task> operation, CancellationToken ct = default)`.
+Each invocation owns a fresh context and native async transaction, awaits the
+callback, calls `SaveChangesAsync`, commits, then asynchronously disposes the
+transaction and context. The factory must supply independently usable contexts
+and connections. No transaction state is stored in DI. Overlapping invocations
+are independent; SQLite still permits only one writer at a time.
+
+Four virtual overloads on `ProviderBase<TEntity,TId,TContext>` borrow the exact
+caller-owned context; they are not added to `IProviderCrud<TEntity,TId>`:
+
+```csharp
+Task CreateAsync(TContext db, TEntity entity, CancellationToken ct = default);
+Task UpdateAsync(TContext db, TEntity entity, CancellationToken ct = default);
+Task DeleteAsync(TContext db, TId id, CancellationToken ct = default);
+Task DeleteAsync(TContext db, TEntity entity, CancellationToken ct = default);
+```
+
+They never create/dispose that context or begin/commit/roll back its transaction.
+They work with caller-managed native transactions too. **Each call immediately
+saves the entire tracker**, including other entity types and direct EF changes.
+Even an unchanged update or a missing ID delete saves other pending changes.
+Only supply a context whose whole pending state belongs to the operation. For
+precise staging, use native EF and explicit saves instead. Ordinary write methods
+delegate to these virtual overloads through their ownership helper, so a borrowed
+write override serves both paths. Ordinary no-change updates and missing ID
+deletes now also invoke the save lifecycle (including EF save interceptors),
+while still issuing no update/delete SQL for the target row.
+
+Reads on the borrowed context stay native: `db.Set<Customer>().FindAsync([id], token)`
+or ordinary LINQ. An ordinary provider call without `db`, even inside the runner
+callback, creates and disposes an **independent** context and does not join this
+transaction. The runner cannot roll that separate operation back. Independent
+calls may contend for database locks; use the explicit context for participating
+work. Await all callback work sequentially; do not use the same context concurrently,
+return live queries or retain it after the callback. A second runner call is
+another independent transaction, not nested transaction support.
+
+### Tracking and concurrency
+
+The #10 key/scalar/token restrictions still apply. Update uses native `FindAsync`
+and reuses tracked identity; detached entity delete searches the local tracker
+without a database existence lookup. Neither attaches a replacement instance for
+an already tracked key. Tracked inputs retain EF's existing original concurrency
+values, even if current token values changed. Detached inputs supply expected
+tokens to the tracked target, including an already pending scalar update. A
+no-change detached edit of an unchanged row still asserts no version. Added or
+deleted tracked update inputs/targets are rejected instead of becoming upserts.
+
+Tracked entities receive generated keys/tokens after each successful save and can
+be edited again within the same context. Detached edits are not refreshed; reload
+before reusing their tokens. Application-managed tokens still require a specialized
+native update with explicit original/new values; generic entity delete supports
+these tokens. Conflicts propagate as `DbUpdateConcurrencyException`. Rollback
+reverts database writes, **not** in-memory keys, refreshed tokens or tracker state;
+discard failed workflow entities. Let provider failures escape the callback;
+swallowing them and continuing is not a supported recovery pattern.
+
+### Failure and cleanup
+
+Creation failures propagate; the factory owns resources it never returned. Begin
+failures still dispose the acquired context. Callback, final-save, commit and
+cancellation failures attempt rollback using a separate **five-second** token,
+independent of request cancellation. This is a cooperative cancellation budget;
+a provider that ignores cancellation cannot be forcibly stopped. Transaction and
+context disposal are always awaited in that order, even after rollback/disposal
+failure. Disposal APIs have no cancellation token.
+
+The original exception and stack survive. Secondary cleanup errors are attached
+using standard `Exception.Data`, without a new exception or diagnostics service:
+
+| Data key | Value |
+| --- | --- |
+| `EfCoreNexus.RollbackAsyncException` | Secondary rollback exception, including cleanup timeout. |
+| `EfCoreNexus.TransactionDisposeAsyncException` | Secondary transaction disposal exception. |
+| `EfCoreNexus.DisposeAsyncException` | Secondary context disposal exception (same as the ownership helper). |
+| `EfCoreNexus.CommitOutcome` | `"Committed"` for cleanup failure after acknowledged commit; `"Unknown"` if commit threw. Absent if commit was never attempted. |
+
+A cleanup-only exception propagates directly. After acknowledged commit the runner
+never attempts rollback; a cleanup exception does not mean the changes were lost.
+If commit throws, even on cancellation or after a successful rollback attempt,
+its outcome may be unknown. No verification or exactly-once guarantee is supplied.
+Do not blindly replay the operation.
+
+This is a single-attempt runner: no retry, savepoint, ambient transaction, nesting
+or execution-strategy wrapper is added. **Retrying execution strategies are not
+validated/supported by this implementation.** EF can reject a user transaction
+under such a strategy. Native composition would have to wrap the whole invocation
+with fresh contexts and mutable entities per attempt, replay-safe callbacks and
+application-specific handling of uncertain commits; this has not been tested.
+See [EF transaction limitations](https://learn.microsoft.com/en-us/ef/core/saving/transactions)
+and [execution strategies and commit uncertainty](https://learn.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency).
+SQL Server rowversion, SQL Server transaction behavior and Windows execution
+remain unverified; SQLite tests establish only the covered SQLite behavior.
+
 ## Ownership and temporary legacy boundary
 
 Both protected `WithContextAsync` forms delegate to #8's `ContextOperations`.
@@ -235,8 +350,8 @@ streams or lazy-loading dependencies, or leave background work running.
 
 `ProviderBase<TEntity,TId,TContext>` now accepts only `IDbContextFactory<TContext>`
 with `TEntity : class`, `TId : notnull`, `TContext : DbContext`. It offers
-the six ordinary CRUD methods and two ownership helpers. It neither depends on
-nor participates in `TransactionService`.
+the six ordinary CRUD methods, four borrowed write overloads and two ownership
+helpers. It neither depends on nor participates in `TransactionService`.
 
 The old provider implementation and its CRUD interface are retained in
 `EfCoreNexus.Framework.Legacy.Provider`. This is a **source-breaking
@@ -247,9 +362,9 @@ automatic fallback, adapter, or new CRUD/transaction implementation.
 
 | Temporarily retained | Why / removal boundary |
 | --- | --- |
-| Legacy `ProviderBase`, `IProviderCrud`, `IProvider`, `ProviderFactory` / `IProviderFactory`, `DataService` / `IDataService`, `TransactionService` | Existing sample CRUD and transactions still depend on them. Keep behavior/regression tests until #10/#11 and consumer migration permit removal; do not port new features to this path. |
-| `BaseContext`, `BaseContextFactory`, `StartupConfiguration`, `DataAssemblyConfiguration`, `EntityTypeConfigurationDependency` | Still required by that sample/setup and its regression tests. Native consumers bypass the entire chain; remove it when remaining consumers migrate. |
-| `System.Linq.Dynamic.Core` | Only the legacy key query still needs it; review removal after #10 and remaining legacy consumers. No dependency was added or changed for #9/#10. |
+| Legacy `ProviderBase`, `IProviderCrud`, `IProvider`, `ProviderFactory` / `IProviderFactory`, `DataService` / `IDataService`, `TransactionService` | The sample `TestProvider.DeactivateAndCreate` and `DataService`/provider lookup still require the old transaction path. Remove it after the sample and remaining consumers migrate in #12, porting useful regression tests and retiring legacy defect characterizations; do not port new features to it. |
+| `BaseContext`, `BaseContextFactory`, `StartupConfiguration`, `DataAssemblyConfiguration`, `EntityTypeConfigurationDependency` | Still required by that sample/setup and its regression tests. Native consumers bypass the entire chain; remove it with the #12 consumer migration. |
+| `System.Linq.Dynamic.Core` | Only legacy key queries still need it; remove after the legacy provider and its consumers migrate in #12. No dependencies were added or changed for #11. |
 
 No legacy CRUD, tracking or transaction semantics were changed. Its characterized
 ownership defects remain visible in `LegacyContextOwnershipTests`; the native
@@ -307,3 +422,27 @@ explicit application-managed renewal, rejected mappings, cancellation and async
 context disposal. Existing ownership and DI cases were retained without repetition.
 The transitive audit found no known vulnerable packages in all four projects.
 No packages were published; SQL Server and Windows were not exercised.
+
+
+## Validation for issue #11
+
+Based on current `origin/v2` at `d059634` (merged #10 / PR #15). Executed on
+Linux with .NET SDK 10.0.113 / runtime 10.0.13 and EF Core 10.0.13:
+
+```sh
+dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
+dotnet build --no-restore -p:GeneratePackageOnBuild=false --verbosity minimal
+dotnet test --no-build --no-restore --filter 'FullyQualifiedName~TransactionTests|FullyQualifiedName~TransactionRunnerFailureTests|FullyQualifiedName~AsyncCrudTests' --logger 'trx;LogFileName=issue-11-focused.trx' --results-directory /tmp/efcorenexus-issue-11-focused --verbosity minimal
+dotnet test --no-build --no-restore --logger 'trx;LogFileName=issue-11.trx' --results-directory /tmp/efcorenexus-issue-11-results --verbosity minimal
+dotnet list package --vulnerable --include-transitive
+```
+
+Restore and final build passed with zero build warnings/errors. All **160 tests
+passed**, zero failures/skips: 116 existing cases and **44 new cases**. The focused
+CRUD/transaction/concurrency run passed all **70 cases**. The new cases cover
+16 borrowed-write regressions, 10 SQLite transaction cases and 18 boundary/failure
+cases; see the sections above for contracts and limits. The audit found no known
+vulnerable packages in all four projects including transitives, using nuget.org.
+No package versions/dependencies changed; local package generation was disabled.
+Nothing was published, merged or released. The Blazor sample migration remains
+in #12; Windows, SQL Server and retrying execution strategies were not exercised.
