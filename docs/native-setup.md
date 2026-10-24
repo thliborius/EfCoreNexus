@@ -9,18 +9,7 @@ This page describes implemented setup, ordinary async CRUD (#10), custom
 operations, and optional shared-context transactions (#11). The design and
 trade-offs remain in [architecture-v2.md](architecture-v2.md).
 
-## Before and after
-
-The inherited setup needs a `BaseContext` subclass, a `BaseContextFactory`
-subclass, configuration wrapper classes, and startup/provider lookup plumbing:
-
-```csharp
-var options = new DbContextOptionsBuilder<MainContext>().UseSqlServer(connection);
-var assembly = new DataAssemblyConfiguration(typeof(Customer).Assembly.GetName().Name!);
-var factory = new MainContextFactory(assembly, options);
-new StartupConfiguration<MainContext>(factory, options).ConfigureDataservice(services);
-// Consumers retrieve providers through DataService.
-```
+## Native setup
 
 The native path uses `EfCoreNexus.Framework.Helper` and
 `EfCoreNexus.Framework.Provider` alongside normal EF/DI namespaces:
@@ -340,7 +329,7 @@ and [execution strategies and commit uncertainty](https://learn.microsoft.com/en
 SQL Server rowversion, SQL Server transaction behavior and Windows execution
 remain unverified; SQLite tests establish only the covered SQLite behavior.
 
-## Ownership and temporary legacy boundary
+## Context ownership
 
 Both protected `WithContextAsync` forms delegate to #8's `ContextOperations`.
 Each call creates one native factory context, forwards cancellation, awaits the
@@ -355,96 +344,6 @@ with `TEntity : class`, `TId : notnull`, `TContext : DbContext`. It offers
 the six ordinary CRUD methods, four borrowed write overloads and two ownership
 helpers. It neither depends on nor participates in `TransactionService`.
 
-The old provider implementation and its CRUD interface are retained in
-`EfCoreNexus.Framework.Legacy.Provider`. This is a **source-breaking
-namespace/constructor/interface change** for existing providers and callers
-explicitly naming the old interface. The sample and inherited
-tests explicitly import the legacy namespace. There is no dual-constructor base,
-automatic fallback, adapter, or new CRUD/transaction implementation.
-
-| Temporarily retained | Why / removal boundary |
-| --- | --- |
-| Legacy `ProviderBase`, `IProviderCrud`, `IProvider`, `ProviderFactory` / `IProviderFactory`, `DataService` / `IDataService`, `TransactionService` | The sample `TestProvider.DeactivateAndCreate` and `DataService`/provider lookup still require the old transaction path. Remove it after the sample and remaining consumers migrate in #12, porting useful regression tests and retiring legacy defect characterizations; do not port new features to it. |
-| `BaseContext`, `BaseContextFactory`, `StartupConfiguration`, `DataAssemblyConfiguration`, `EntityTypeConfigurationDependency` | Still required by that sample/setup and its regression tests. Native consumers bypass the entire chain; remove it with the #12 consumer migration. |
-| `System.Linq.Dynamic.Core` | Only legacy key queries still need it; remove after the legacy provider and its consumers migrate in #12. No dependencies were added or changed for #11. |
-
-No legacy CRUD, tracking or transaction semantics were changed. Its characterized
-ownership defects remain visible in `LegacyContextOwnershipTests`; the native
-provider path has no ambient transaction state. The Blazor sample still shows
-the legacy API pending its planned migration in #12. No schema migration or
-SQL Server/Windows execution is claimed by the SQLite/Linux tests.
-
-## Validation for issue #9
-
-Based on `origin/v2` at `9f9d6ff` (merged #8). Executed on Linux with .NET SDK
-10.0.113 / runtime 10.0.13 and EF Core 10.0.13:
-
-```sh
-dotnet restore
-dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
-dotnet build --no-restore -p:GeneratePackageOnBuild=false --verbosity minimal
-dotnet test --no-build --no-restore --logger 'trx;LogFileName=issue-9.trx' --results-directory /tmp/efcorenexus-issue-9-results --verbosity minimal
-dotnet list package --vulnerable --include-transitive
-```
-
-Restore succeeded; the final build had zero warnings/errors. **90 tests passed**
-with zero failures/skips: all 45 existing cases, 24 additional runs of the #8
-ownership contract through the new provider surface, and 21 DI/model cases.
-Coverage includes scoped constructor dependencies/disposal, exact context matching,
-indirect inheritance, idempotency/conflicts, marker-only and configuration-only
-roots, constructor binding, excluded classifications, Fluent configuration order,
-two models in one assembly and independently built runtime/design-time models.
-The audit found no known vulnerable packages in all four projects, including
-transitive dependencies, using nuget.org. No package versions/dependencies changed;
-local package generation was disabled and nothing was published.
-
-
-## Validation for issue #10
-
-Based on `origin/v2` at `6cd3471`, after PR #14 merged. Executed on Linux with
-.NET SDK 10.0.113 / runtime 10.0.13 and EF Core 10.0.13:
-
-```sh
-dotnet restore
-dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
-dotnet build --no-restore -p:GeneratePackageOnBuild=false --verbosity minimal
-dotnet test --no-build --no-restore --filter FullyQualifiedName~AsyncCrudTests --verbosity minimal
-dotnet test --no-build --no-restore --logger 'trx;LogFileName=issue-10.trx' --results-directory /tmp/efcorenexus-issue-10-results --verbosity minimal
-dotnet list package --vulnerable --include-transitive
-```
-
-Restore and build passed with zero build warnings/errors. All **116 tests passed**
-without failures/skips: 90 existing cases and **26 new CRUD cases**. The focused
-CRUD run passed all 26. Coverage includes the six-method interface, metadata keys,
-generated IDs, database duplicates, actual changed SQL columns, full-edit defaults,
-EF comparers/backing fields/converters, untouched navigation/owned/complex graphs,
-missing-row contracts, stale and overlapping updates, multiple generated tokens
-(including binary values), lookup/save deletion races, both delete variants,
-explicit application-managed renewal, rejected mappings, cancellation and async
-context disposal. Existing ownership and DI cases were retained without repetition.
-The transitive audit found no known vulnerable packages in all four projects.
-No packages were published; SQL Server and Windows were not exercised.
-
-
-## Validation for issue #11
-
-Based on current `origin/v2` at `d059634` (merged #10 / PR #15). Executed on
-Linux with .NET SDK 10.0.113 / runtime 10.0.13 and EF Core 10.0.13:
-
-```sh
-dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
-dotnet build --no-restore -p:GeneratePackageOnBuild=false --verbosity minimal
-dotnet test --no-build --no-restore --filter 'FullyQualifiedName~TransactionTests|FullyQualifiedName~TransactionRunnerFailureTests|FullyQualifiedName~AsyncCrudTests' --logger 'trx;LogFileName=issue-11-focused.trx' --results-directory /tmp/efcorenexus-issue-11-focused --verbosity minimal
-dotnet test --no-build --no-restore --logger 'trx;LogFileName=issue-11.trx' --results-directory /tmp/efcorenexus-issue-11-results --verbosity minimal
-dotnet list package --vulnerable --include-transitive
-```
-
-Restore and final build passed with zero build warnings/errors. All **162 tests
-passed**, zero failures/skips: 116 existing cases and **46 new cases**. The focused
-CRUD/transaction/concurrency run passed all **72 cases**. The new cases cover
-18 borrowed-write regressions, 10 SQLite transaction cases and 18 boundary/failure
-cases; see the sections above for contracts and limits. The audit found no known
-vulnerable packages in all four projects including transitives, using nuget.org.
-No package versions/dependencies changed; local package generation was disabled.
-Nothing was published, merged or released. The Blazor sample migration remains
-in #12; Windows, SQL Server and retrying execution strategies were not exercised.
+Legacy components were removed in #12. See [migration from v1](migration-v2.md) and
+[current validation](validation-12.md); earlier ticket evidence is retained in the
+[historical architecture record](history/architecture-proposal.md).

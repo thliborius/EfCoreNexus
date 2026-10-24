@@ -1,1 +1,0 @@
-set EFCORETOOLSDB=Server=.;Initial Catalog=EfCoreNexus;Persist Security Info=False;Integrated Security=true;MultipleActiveResultSets=True;Encrypt=false;TrustServerCertificate=true

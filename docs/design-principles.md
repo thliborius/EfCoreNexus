@@ -4,7 +4,7 @@
 
 EfCoreNexus is a **small, optional helper for developers using EF Core with Blazor**. Its purpose is to remove recurring setup and CRUD boilerplate, **not** to replace Entity Framework Core or prescribe how an entire application must be structured.
 
-These are guiding constraints for the v2 architecture review (see [issue #1](https://github.com/thliborius/EfCoreNexus/issues/1)), rather than decisions about specific API signatures.
+These constraints guide the implemented [v2 architecture](architecture-v2.md).
 
 ## Principles
 
@@ -16,8 +16,8 @@ These are guiding constraints for the v2 architecture review (see [issue #1](htt
 6. **Low surprise and easy debugging.** Avoid hidden state, opaque magic, and reflection that makes behavior hard to reason about. Favor simple, explicit, testable behavior where convenience and predictability conflict.
 7. **Prove the benefit.** Use short before/after consumer examples and runnable tests to demonstrate less boilerplate without loss of clarity. Evaluate complexity from the *consumer's* perspective as well as the library maintainer's.
 
-## Scope of the v2 architecture discussion
+## Scope
 
-The concrete API, whether providers are directly injected or retrieved through `DataService`, and the transaction/Unit-of-Work model are **not decided** by this document. Compare alternatives first and record the trade-offs in the forthcoming architecture proposal.
-
-The existing v1 public NuGet package remains unchanged; work on v2 is integrated into the `v2` branch through reviewed pull requests.
+The selected v2 API uses direct provider DI, native EF factories and an optional
+transaction runner. The published v1 package remains unchanged; v2 integration
+happens through reviewed pull requests against `v2`.
