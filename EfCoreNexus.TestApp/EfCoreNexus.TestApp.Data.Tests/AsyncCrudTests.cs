@@ -555,6 +555,131 @@ public class AsyncCrudTests
         Assert.That(db.AsyncDisposals, Is.Zero);
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task QueryFiltersHideRowsFromReadsAndUntrackedLookupWrites(bool borrowed)
+    {
+        var provider = Provider<FilteredRow, int>();
+        var visible = new FilteredRow();
+        var hidden = new[] { new FilteredRow { TenantId = 2 }, new FilteredRow { IsDeleted = true } };
+        await provider.CreateAsync(visible);
+        foreach (var row in hidden) await provider.CreateAsync(row);
+        Assert.That((await provider.GetAllAsync()).Select(x => x.Id), Is.EqualTo(new[] { visible.Id }));
+        Assert.That((await provider.GetByIdAsync(visible.Id))!.Id, Is.EqualTo(visible.Id));
+
+        await using var db = await _factory.CreateDbContextAsync();
+        foreach (var row in hidden)
+        {
+            Assert.That(await provider.GetByIdAsync(row.Id), Is.Null);
+            row.Name = "unauthorized edit";
+            _commands.Sql.Clear();
+            await Assert.ThrowsAsync<KeyNotFoundException>(() => borrowed
+                ? provider.UpdateAsync(db, row) : provider.UpdateAsync(row));
+            if (borrowed) await provider.DeleteAsync(db, row.Id);
+            else await provider.DeleteAsync(row.Id);
+            Assert.That(_commands.Sql.All(sql => sql.StartsWith("SELECT")), Is.True);
+            Assert.That(_commands.Sql, Has.Some.Contains("TenantId").And.Some.Contains("IsDeleted"));
+            Assert.That((await db.Set<FilteredRow>().IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(x => x.Id == row.Id)).Name, Is.EqualTo("original"));
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BorrowedLookupWritesUseHiddenTrackedIdentityWithoutRecheckingFilters(bool detachedInput)
+    {
+        var provider = Provider<FilteredRow, int>();
+        foreach (var row in new[] { new FilteredRow { TenantId = 2 }, new FilteredRow { IsDeleted = true } })
+        {
+            await provider.CreateAsync(row);
+            await using var db = await _factory.CreateDbContextAsync();
+            var tracked = await db.Set<FilteredRow>().IgnoreQueryFilters().SingleAsync(x => x.Id == row.Id);
+            var input = detachedInput ? row : tracked;
+            input.Name = "written through tracker";
+            _commands.Sql.Clear();
+            await provider.UpdateAsync(db, input);
+            Assert.That(_commands.Sql, Has.Count.EqualTo(1));
+            Assert.That(_commands.Sql.Single(), Does.StartWith("UPDATE"));
+            Assert.That(_commands.Sql.Single().Split("WHERE")[1], Does.Contain("Id").And.Contain("Version")
+                .And.Not.Contain("TenantId").And.Not.Contain("IsDeleted"));
+            await using var check = await _factory.CreateDbContextAsync();
+            Assert.That((await check.Set<FilteredRow>().IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(x => x.Id == row.Id)).Name, Is.EqualTo(input.Name));
+            Assert.That(await provider.GetByIdAsync(row.Id), Is.Null);
+
+            _commands.Sql.Clear();
+            await provider.DeleteAsync(db, row.Id);
+            Assert.That(_commands.Sql.Single(), Does.StartWith("DELETE"));
+            Assert.That(await check.Set<FilteredRow>().IgnoreQueryFilters().AnyAsync(x => x.Id == row.Id), Is.False);
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task EntityDeleteIgnoresFiltersButStillChecksTokens(bool borrowed)
+    {
+        var provider = Provider<FilteredRow, int>();
+        foreach (var row in new[] { new FilteredRow { TenantId = 2 }, new FilteredRow { IsDeleted = true } })
+        {
+            await provider.CreateAsync(row);
+            await using var db = await _factory.CreateDbContextAsync();
+            row.Version = "stale";
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => borrowed
+                ? provider.DeleteAsync(db, row) : provider.DeleteAsync(row));
+            await using var check = await _factory.CreateDbContextAsync();
+            Assert.That(await check.Set<FilteredRow>().IgnoreQueryFilters().AnyAsync(x => x.Id == row.Id), Is.True);
+            db.ChangeTracker.Clear(); // Discard failed delete state before the next operation.
+            row.Version = "original";
+            _commands.Sql.Clear();
+            if (borrowed) await provider.DeleteAsync(db, row);
+            else await provider.DeleteAsync(row);
+            var sql = _commands.Sql.Single();
+            Assert.That(sql, Does.StartWith("DELETE"));
+            Assert.That(sql.Split("WHERE")[1], Does.Contain("Id").And.Contain("Version")
+                .And.Not.Contain("TenantId").And.Not.Contain("IsDeleted"));
+            Assert.That(await check.Set<FilteredRow>().IgnoreQueryFilters().AnyAsync(x => x.Id == row.Id), Is.False);
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task BorrowedEntityDeleteCanDeleteHiddenTrackedTargets(bool detachedInput)
+    {
+        var provider = Provider<FilteredRow, int>();
+        foreach (var row in new[] { new FilteredRow { TenantId = 2 }, new FilteredRow { IsDeleted = true } })
+        {
+            await provider.CreateAsync(row);
+            await using var db = await _factory.CreateDbContextAsync();
+            var tracked = await db.Set<FilteredRow>().IgnoreQueryFilters().SingleAsync(x => x.Id == row.Id);
+            _commands.Sql.Clear();
+            await provider.DeleteAsync(db, detachedInput ? row : tracked);
+            Assert.That(_commands.Sql.Single(), Does.StartWith("DELETE"));
+            await using var check = await _factory.CreateDbContextAsync();
+            Assert.That(await check.Set<FilteredRow>().IgnoreQueryFilters().AnyAsync(x => x.Id == row.Id), Is.False);
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task FullScalarEditCanChangeTenantPrivilegeAndSoftDeleteFields(bool borrowed)
+    {
+        var provider = Provider<FilteredRow, int>();
+        var row = new FilteredRow();
+        await provider.CreateAsync(row);
+        row.TenantId = 2;
+        row.IsAdmin = true;
+        row.IsDeleted = true;
+        await using var db = await _factory.CreateDbContextAsync();
+        if (borrowed) await provider.UpdateAsync(db, row);
+        else await provider.UpdateAsync(row);
+        var stored = await db.Set<FilteredRow>().IgnoreQueryFilters().AsNoTracking().SingleAsync();
+        Assert.That(stored.TenantId, Is.EqualTo(2));
+        Assert.That(stored.IsAdmin, Is.True);
+        Assert.That(stored.IsDeleted, Is.True);
+        Assert.That(await provider.GetByIdAsync(row.Id), Is.Null);
+        Assert.That(await provider.GetAllAsync(), Is.Empty);
+    }
+
     private CrudProvider<TEntity, TId> Provider<TEntity, TId>() where TEntity : class where TId : notnull
         => new(_factory);
     private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -593,6 +718,7 @@ public class AsyncCrudTests
 
     private sealed class CrudContext(DbContextOptions<CrudContext> options) : DbContext(options)
     {
+        public int TenantId => 1;
         public int AsyncDisposals { get; private set; }
         public int SyncDisposals { get; private set; }
         public override async ValueTask DisposeAsync() { AsyncDisposals++; await base.DisposeAsync(); }
@@ -607,6 +733,9 @@ public class AsyncCrudTests
             row.ComplexProperty(x => x.Details);
             row.OwnsOne(x => x.Owned);
             row.HasOne(x => x.Child).WithMany().HasForeignKey("ChildId");
+            model.Entity<FilteredRow>().HasQueryFilter(x => x.TenantId == TenantId && !x.IsDeleted);
+            model.Entity<FilteredRow>().Property(x => x.Version)
+                .HasComputedColumnSql("\"Name\"", stored: true).IsConcurrencyToken();
             model.Entity<IntRow>();
             model.Entity<StringRow>().HasKey(x => x.Code);
             model.Entity<VersionRow>().Property(x => x.Version)
@@ -678,6 +807,15 @@ public class AsyncCrudTests
     private sealed class OwnedDetails { public string City { get; set; } = "original owned"; }
     private enum Mood { Normal, Happy }
     private sealed class Child { public int Id { get; set; } public string Name { get; set; } = ""; }
+    private sealed class FilteredRow
+    {
+        public int Id { get; set; }
+        public int TenantId { get; set; } = 1;
+        public bool IsDeleted { get; set; }
+        public bool IsAdmin { get; set; }
+        public string Name { get; set; } = "original";
+        public string Version { get; set; } = "";
+    }
     private sealed class IntRow { public int Id { get; private set; } public string Name { get; set; } = ""; }
     private sealed class StringRow { public string Code { get; set; } = ""; public string Name { get; set; } = ""; }
     private sealed class VersionRow

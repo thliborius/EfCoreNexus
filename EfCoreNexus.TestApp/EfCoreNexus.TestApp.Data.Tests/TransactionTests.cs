@@ -5,6 +5,7 @@ using EfCoreNexus.Framework.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace EfCoreNexus.TestApp.Data.Tests;
@@ -250,6 +251,26 @@ public class TransactionTests
         Assert.That(thrown!.Data["EfCoreNexus.CommitOutcome"], Is.EqualTo("Unknown"));
         Assert.That(calls, Is.EqualTo(1));
         Assert.That((await _customers.GetAllAsync()).Single().Name, Is.EqualTo("actually committed"));
+    }
+
+    [Test]
+    public async Task DetachedUpdatePreservesConceptualNullForComparerEqualRequiredForeignKey()
+    {
+        var customer = new Customer { Name = "principal" };
+        await _customers.CreateAsync(customer);
+        var order = new Order { CustomerId = customer.Id };
+        await _orders.CreateAsync(order);
+        await using var db = await _factory.CreateDbContextAsync();
+        db.ChangeTracker.DeleteOrphansTiming = CascadeTiming.Never;
+        var tracked = (await db.Set<Order>().FindAsync(order.Id))!;
+        db.Entry(tracked).Property(nameof(Order.CustomerId)).CurrentValue = null;
+        Assert.That(tracked.CustomerId, Is.EqualTo(order.CustomerId));
+
+        // #18: assigning comparer-equal CLR values (e.g. SetValues) clears EF's conceptual null.
+        // Keep the pending required-relationship failure instead of silently repairing the tracker.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _orders.UpdateAsync(db, order));
+        Assert.That(db.Entry(order).State, Is.EqualTo(EntityState.Detached));
+        Assert.That((await _orders.GetByIdAsync(order.Id))!.CustomerId, Is.EqualTo(customer.Id));
     }
 
     private sealed class Customers(IDbContextFactory<Shop> factory) : ProviderBase<Customer, int, Shop>(factory);
