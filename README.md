@@ -38,6 +38,10 @@ With the help of reflection, the entity, the provider and the optional configura
 - Create feature branches from `v2` and integrate them through pull requests
   targeting `v2`. The .NET 10 baseline migration is the first such pull request.
 
+The [v2 architecture and migration proposal](docs/architecture-v2.md) records
+recommendations for review in [issue #1](https://github.com/thliborius/EfCoreNexus/issues/1).
+Its proposed APIs are not implemented yet.
+
 ## Build and test (.NET 10 baseline)
 
 All four projects target `net10.0` and use EF Core 10.0.13. Install the stable
