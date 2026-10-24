@@ -1,14 +1,11 @@
 using System.Collections.Concurrent;
-using EfCoreNexus.Framework.Context;
 using EfCoreNexus.Framework.Provider;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreNexus.TestApp.Data.Tests;
 
-[TestFixture(false)]
-[TestFixture(true)]
-public class ContextOperationsTests(bool throughProvider)
+public class ContextOperationsTests
 {
     [TestCase(false)]
     [TestCase(true)]
@@ -288,16 +285,14 @@ public class ContextOperationsTests(bool throughProvider)
             }, ct)
             : WithContextAsync(factory, operation, ct);
 
-    // Run the issue #8 contract against both the internal helper and the actual provider surface.
+    // Exercise ownership through the public provider extension surface.
     private Task WithContextAsync(ObservedFactory factory,
         Func<ObservedContext, CancellationToken, Task> operation, CancellationToken ct = default)
-        => throughProvider ? new OwnershipProvider(factory).RunAsync(operation, ct)
-            : ContextOperations.WithContextAsync(factory, operation, ct);
+        => new OwnershipProvider(factory).RunAsync(operation, ct);
 
     private Task<TResult> WithContextAsync<TResult>(ObservedFactory factory,
         Func<ObservedContext, CancellationToken, Task<TResult>> operation, CancellationToken ct = default)
-        => throughProvider ? new OwnershipProvider(factory).RunAsync(operation, ct)
-            : ContextOperations.WithContextAsync(factory, operation, ct);
+        => new OwnershipProvider(factory).RunAsync(operation, ct);
 
     private sealed class OwnershipProvider(IDbContextFactory<ObservedContext> factory)
         : ProviderBase<Row, int, ObservedContext>(factory)

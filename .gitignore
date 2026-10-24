@@ -1,3 +1,9 @@
 # .NET build artifacts (all projects)
 [Bb]in/
 [Oo]bj/
+
+# Local sample SQLite databases
+*.db
+*.db-shm
+*.db-wal
+.playwright-mcp/

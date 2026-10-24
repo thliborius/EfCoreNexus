@@ -1,13 +1,11 @@
-﻿using EfCoreNexus.Framework.Helper;
 using EfCoreNexus.TestApp.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EfCoreNexus.TestApp.Data.Configurations;
 
-internal class TestConfiguration : EntityTypeConfigurationDependency<Test>
+public sealed class TestConfiguration : IEntityTypeConfiguration<Test>
 {
-    public override void Configure(EntityTypeBuilder<Test> builder)
-    {
-        builder.HasKey(x => x.TestId);  // already defined as attribute in entity class, for demonstration purpose
-    }
+    public void Configure(EntityTypeBuilder<Test> builder)
+        => builder.Property(x => x.Content).IsRequired();
 }

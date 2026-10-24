@@ -1,2 +1,0 @@
-call migrations_connectionstring.bat
-dotnet ef database update

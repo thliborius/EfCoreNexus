@@ -95,10 +95,10 @@ public class EntityRegistrationTests
     [Test]
     public void NoPredicateIncludesAllEligibleRootsOfExplicitAssembly()
     {
-        // The data assembly contains one marked entity. No native DbSet/configuration is needed.
+        // Both sample entities are included without DbSet or per-type registration.
         var model = new ModelBuilder();
         model.RegisterNexusEntities(typeof(Entities.Test).Assembly);
-        Assert.That(model.Model.GetEntityTypes().Select(entity => entity.ClrType), Is.EqualTo(new[] { typeof(Entities.Test) }));
+        Assert.That(model.Model.GetEntityTypes().Select(entity => entity.ClrType), Is.EquivalentTo(new[] { typeof(Entities.Test), typeof(Entities.Memo) }));
     }
 
     [Test]

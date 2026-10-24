@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -37,13 +37,9 @@ Additionally you can add a configuration for each entity.</Description>
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="EfCoreNexus.TestApp.Data.Tests" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
-    <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.4" />
   </ItemGroup>
 
 </Project>
