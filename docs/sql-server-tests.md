@@ -133,8 +133,38 @@ The available GitHub OAuth credential has `repo` but **no `workflow` scope**
 (`gh auth status`). GitHub requires that scope to add/update workflow files; see
 [GitHub's scope documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes).
 Consequently this PR leaves `.github/workflows/dotnet.yml` unchanged. The SQL
-Server job below is a proposal and has **not run in GitHub Actions**. An authorized
-maintainer can add it under the existing workflow's `jobs:` alongside `build`:
+Server job below has **not run in GitHub Actions**. During the PR #22 CI follow-up,
+an actual push of this addition to the existing PR branch was rejected by GitHub:
+
+> refusing to allow an OAuth App to create or update workflow `.github/workflows/dotnet.yml` without `workflow` scope
+
+The ready-to-apply [workflow patch](patches/sql-server-ci.patch) adds this separate
+job while preserving the existing regular CI job byte for byte. Its 15-minute
+timeout allows for image download and the fixture's five-minute cold-start budget.
+There are no fixed credentials, secrets or additional actions.
+
+Use a clean checkout and your own GitHub identity with permission to update
+workflow files (OAuth/classic PAT authentication needs the `workflow` scope).
+Run these commands from the repository root, stopping if any command fails:
+
+```sh
+git fetch origin
+git switch feature/issue-21-sql-server-integration
+git pull --ff-only
+git apply --check docs/patches/sql-server-ci.patch
+git apply docs/patches/sql-server-ci.patch
+git diff --check
+git diff -- .github/workflows/dotnet.yml
+git add .github/workflows/dotnet.yml
+git commit -m "ci: run SQL Server integration tests in a separate job"
+git push origin HEAD
+gh pr checks 22 --watch
+```
+
+The push updates **PR #22 against `v2`** and triggers the existing pull-request
+workflow with both jobs. Check the `sql-server` job log for seven passed tests
+and zero skips; Docker/startup errors must fail it. No CI success is claimed for
+the unapplied patch. The patch appends this job under the existing `jobs:`:
 
 ```yaml
   sql-server:
@@ -162,3 +192,12 @@ maintainer can add it under the existing workflow's `jobs:` alongside `build`:
 The existing PR job continues to validate the normal solution/SQLite tests.
 No service container, SQL Server secrets or extra orchestration are required;
 Testcontainers owns startup, readiness and cleanup inside the separate job.
+
+Follow-up validation: solution restore/build and **133/133 SQLite tests** passed
+again without warnings or skips. The SQL test project's restore/build and both
+transitive NuGet audits passed. An isolated copy of the project restored without
+the explicit Pkcs reference still resolved vulnerable `9.0.11`, failing with
+`NU1902`/`NU1903`; therefore the existing `9.0.21` reference is unchanged. SQL test
+sources and framework code are unchanged. The workflow YAML parsed successfully,
+the regular job was verified unchanged, and `git apply --check` confirmed the
+patch applies cleanly. This follow-up did not rerun the SQL container tests.
