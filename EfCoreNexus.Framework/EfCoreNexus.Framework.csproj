@@ -7,7 +7,7 @@
     <Title>EfCoreNexus</Title>
     <PackageId>EfCoreNexus.Framework</PackageId>
     <Authors>Thorsten Liborius</Authors>
-    <Description>Less boilerplate. More Entity Framework. Small, optional EF Core helpers for Blazor: typed async CRUD, per-operation DbContext ownership, explicit assembly discovery and optional multi-provider transactions. Requires .NET 10 / EF Core 10; native EF APIs remain available.</Description>
+    <Description>Less boilerplate. More Entity Framework. Optional helpers for Blazor apps using typed EF Core providers: inherit ready-to-use async CRUD instead of reimplementing it for every entity. No required repository interfaces or per-provider DI registration; safe per-operation DbContext handling. Native EF Core stays available; transactions are optional. Requires .NET 10 / EF Core 10.</Description>
     <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/thliborius/EfCoreNexus/</RepositoryUrl>
