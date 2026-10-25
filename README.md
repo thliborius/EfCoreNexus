@@ -140,3 +140,4 @@ EF runs on the server; browser-side EF/DB secrets in WebAssembly are unsupported
 - [Detailed native setup and API contracts](docs/native-setup.md)
 - [Architecture and complexity review](docs/architecture-v2.md)
 - [Executed checks and platform limits](docs/validation-12.md)
+- [Optional SQL Server integration tests with Docker](docs/sql-server-tests.md)
