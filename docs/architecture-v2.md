@@ -53,8 +53,9 @@ removing them would need a separate API decision and real consumer evidence.
 
 ## Remaining limitations / technical debt
 
-- SQLite sample concurrency uses a renewed Guid. SQL Server rowversion and retrying
-  execution strategies remain unverified; automatic retries are unsupported.
+- SQLite sample concurrency uses a renewed Guid. SQL Server rowversion is covered
+  by [optional container integration tests](sql-server-tests.md). Retrying execution
+  strategies remain unverified; automatic retries are unsupported.
 - Assembly scans do not claim trim/Native AOT support; explicit native mapping and
   registration remain the fallback.
 - Generic update is a full scalar edit, not a patch/upsert/graph merge. A no-change

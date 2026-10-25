@@ -187,10 +187,11 @@ A missing update at lookup is distinct from a stale edit or deletion between
 lookup and save, which raises EF's `DbUpdateConcurrencyException`. The application
 chooses reload/conflict handling; without tokens, normal last-writer behavior
 applies. Update does not refresh the detached input's generated values: read again
-before another edit/delete. For SQL Server, `IsRowVersion()` has the intended
-metadata shape, but **SQL Server rowversion behavior has not been integration
-tested**. SQLite tests use an actual computed concurrency column; they do not
-establish SQL Server parity. See [EF concurrency](https://learn.microsoft.com/en-us/ef/core/saving/concurrency).
+before another edit/delete. SQL Server `IsRowVersion()` behavior is verified by
+the [optional SQL Server container integration tests](sql-server-tests.md),
+including stale detached updates/deletes and original binary SQL parameters.
+SQLite tests use an actual computed concurrency column. See
+[EF concurrency](https://learn.microsoft.com/en-us/ef/core/saving/concurrency).
 
 For application-managed tokens, a specialized operation keeps original and new
 values explicit using native EF:
