@@ -4,37 +4,25 @@
 in Blazor: typed async CRUD, safe per-operation contexts and opt-in discovery.
 Native EF stays available. No service locator, mandatory repository or unit of work.
 
-This branch contains **v2 source for .NET 10 / EF Core 10**. The published
-`EfCoreNexus.Framework` **1.0.5** package has a different API. The local
-**2.0.0-preview.1** candidate is not published on nuget.org. The major version
-marks the breaking API/runtime changes; the preview suffix keeps it prerelease.
+**2.0.0** targets **.NET 10 / EF Core 10** and introduces breaking changes from
+`EfCoreNexus.Framework` **1.0.5**. Review the
+[migration guide](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/migration-v2.md)
+before upgrading.
 
-## Install the local preview
+## Install
 
-From a checkout of `v2`, with the .NET 10 SDK:
-
-```sh
-dotnet restore
-dotnet pack EfCoreNexus.Framework/EfCoreNexus.Framework.csproj -c Release -o artifacts/packages
-```
-
-Normal `dotnet build` does not generate a package. In your own .NET 10 application,
-install from that local directory (replace the absolute path for your checkout):
+In your .NET 10 application, install from NuGet:
 
 ```sh
-dotnet new nugetconfig
-dotnet nuget add source /absolute/path/EfCoreNexus/artifacts/packages --name EfCoreNexusPreview --configfile nuget.config
-dotnet add package EfCoreNexus.Framework --version 2.0.0-preview.1
+dotnet add package EfCoreNexus.Framework --version 2.0.0
 dotnet add package Microsoft.EntityFrameworkCore.Sqlite --version 10.0.13
 ```
 
-If the application already has a `nuget.config`, skip its creation and add the
-source to that file. Keep nuget.org enabled for transitive dependencies; do not
-commit a machine-specific local source. EfCoreNexus depends only on
-`Microsoft.EntityFrameworkCore >= 10.0.13`; your application selects a compatible
-concrete database provider. For SQL Server, use
-`Microsoft.EntityFrameworkCore.SqlServer` instead. No public v2 installation is
-available yet; publication is a separate decision.
+EfCoreNexus depends only on `Microsoft.EntityFrameworkCore >= 10.0.13`; your
+application selects a compatible concrete database provider. For SQL Server,
+use `Microsoft.EntityFrameworkCore.SqlServer` instead. Local package builds and
+installation are described separately in the
+[developer release guide](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/release-readiness.md).
 
 ## Setup once
 
@@ -77,7 +65,7 @@ classes are optional. Use explicit boundaries/predicates for multiple models.
 
 Create the database schema before calling CRUD, using your application's
 migration/deployment policy. For a disposable local experiment, the
-[sample](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/sample.md#configuration-and-tooling)
+[sample](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/sample.md#configuration-and-tooling)
 uses native `EnsureCreatedAsync` once at startup. This is not a migration strategy;
 schema setup does not belong in component rendering.
 
@@ -102,14 +90,14 @@ Each call creates and asynchronously disposes a context. Generic update is a ful
 scalar edit, not a graph merge or patch. Entity delete carries the original tokens;
 ID delete does not assert a caller's version. Application-managed token renewal
 needs a specialized native operation; see the sample's memo editor and
-[precise CRUD/concurrency contracts](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/native-setup.md).
+[precise CRUD/concurrency contracts](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/native-setup.md).
 
 **Authorize and validate writes on the server.** Query filters are not an
 authorization or tenant-isolation boundary. Full edits can change every writable
 scalar, including tenant/privilege fields. `DeleteAsync(entity)` performs no
 lookup, and borrowed writes can reuse an already tracked row without rechecking
 filters. Use explicit allowed-field operations and permission checks; see the
-[security contracts](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/native-setup.md#security-boundaries-filters-authorization-and-full-edits).
+[security contracts](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/native-setup.md#security-boundaries-filters-authorization-and-full-edits).
 
 Custom queries remain LINQ inside your provider:
 
@@ -149,7 +137,7 @@ await runner.ExecuteAsync(async (db, ct) =>
 The runner owns commit/rollback/disposal. Pass its context explicitly to every
 participating write: ordinary calls are independent. Each borrowed write saves
 **all pending changes in that context**. No automatic retries, ambient enlistment
-or nested transaction support. See [transaction contracts](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/native-setup.md#optional-multi-provider-transactions).
+or nested transaction support. See [transaction contracts](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/native-setup.md#optional-multi-provider-transactions).
 
 ## Run the sample
 
@@ -174,11 +162,12 @@ can demonstrate stale memo edit/delete conflicts.
 
 Override `ConnectionStrings:Main` in configuration, the environment variable
 `ConnectionStrings__Main`, or CLI `--ConnectionStrings:Main "Data Source=..."`.
-For tooling, configuration and schema lifecycle, see [sample setup](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/sample.md).
+For tooling, configuration and schema lifecycle, see [sample setup](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/sample.md).
 EF runs on the server; browser-side EF/DB secrets in WebAssembly are unsupported.
 
-- [Migration / breaking changes from 1.0.5](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/migration-v2.md)
-- [Detailed native setup and API contracts](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/native-setup.md)
-- [Architecture and complexity review](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/architecture-v2.md)
-- [Release-readiness checks and remaining publication decisions](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/release-readiness.md)
-- [Optional SQL Server integration tests with Docker](https://github.com/thliborius/EfCoreNexus/blob/v2/docs/sql-server-tests.md)
+- [Migration / breaking changes from 1.0.5](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/migration-v2.md)
+- [Detailed native setup and API contracts](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/native-setup.md)
+- [Architecture and complexity review](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/architecture-v2.md)
+- [Developer release guide and validation](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/release-readiness.md)
+- [Optional SQL Server integration tests with Docker](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/sql-server-tests.md)
+- [2.0.0 release notes](https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/release-notes-2.0.0.md)

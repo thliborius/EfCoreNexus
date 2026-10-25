@@ -1,9 +1,9 @@
 # Migrating from v1.0.5 to v2
 
-v2 is source-breaking and requires .NET 10 / EF Core 10. No compatibility facade
-is retained. The package ID remains `EfCoreNexus.Framework`; `2.0.0-preview.1`
-is a local, unpublished candidate. Use the [local package instructions](../README.md#install-the-local-preview)
-to evaluate it before changing an existing application.
+2.0.0 is source-breaking and requires .NET 10 / EF Core 10. No compatibility
+facade is retained. The package ID remains `EfCoreNexus.Framework`. Use the
+[NuGet installation instructions](../README.md#install) and review the
+[2.0.0 release notes](release-notes-2.0.0.md) before upgrading an existing application.
 
 | v1 | v2 replacement |
 | --- | --- |

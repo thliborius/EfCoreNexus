@@ -11,14 +11,14 @@
     <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/thliborius/EfCoreNexus/</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/thliborius/EfCoreNexus/tree/v2</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/thliborius/EfCoreNexus/tree/v2.0.0</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageLicenseFile>license.txt</PackageLicenseFile>
-    <Version>2.0.0-preview.1</Version>
+    <Version>2.0.0</Version>
     <Copyright>Thorsten Liborius</Copyright>
     <PackageTags>EFCore;EntityFrameworkCore;Blazor;CRUD</PackageTags>
-    <PackageReleaseNotes>First v2 preview candidate for local validation; not published. Breaking changes from 1.0.5: .NET 10 / EF Core 10, native DbContextFactory setup, concrete provider DI, async CRUD and explicit transaction contexts replace the legacy service/factory hierarchy. Review migration and security contracts: https://github.com/thliborius/EfCoreNexus/blob/v2/docs/migration-v2.md</PackageReleaseNotes>
+    <PackageReleaseNotes>Stable 2.0.0. Breaking changes from 1.0.5: requires .NET 10 / EF Core 10; native DbContext/IDbContextFactory and concrete provider DI replace legacy context, service and factory abstractions; async CRUD with cancellation and mapped entity keys replaces the old signatures; per-operation contexts and explicit transaction contexts replace implicit shared state. Full scalar updates, concurrency and missing-row contracts require migration review. Release notes: https://github.com/thliborius/EfCoreNexus/blob/v2.0.0/docs/release-notes-2.0.0.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

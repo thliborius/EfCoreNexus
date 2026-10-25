@@ -1,71 +1,70 @@
-# v2 preview release readiness (#23)
+# Stable 2.0.0 release preparation
 
-Local validation on **2026-10-25**, based on `origin/v2` at `5a3c466` (merged
-PR #22). Host: Linux Mint 22.3 x64, .NET SDK `10.0.113`, runtime `10.0.13`,
-EF Core `10.0.13`, Docker Engine `29.9.2`. No framework implementation, public
-API, test semantics or CI workflow was changed for this preparation.
+Prepared on **2026-10-25** from `origin/v2` at
+`e6e42cce827675d5dd5e3567dc9ff8f6938f7295` (merged PR #24).
+Host: Linux x64, .NET SDK `10.0.113`, runtime / EF Core `10.0.13`,
+Docker Engine `29.9.2`. This preparation changes only package metadata and
+release/installation documentation. Framework API, implementation, dependencies,
+tests and CI workflows are unchanged.
 
-## Package and installation
+See [2.0.0 release notes](release-notes-2.0.0.md) and
+[breaking changes from 1.0.5](migration-v2.md).
 
-The published 1.0.5 nuspec was checked directly on nuget.org: its ID is
-`EfCoreNexus.Framework`. That identity is now explicit and unchanged.
-`2.0.0-preview.1` identifies the incompatible .NET 10 / EF Core 10 API as a
-prerelease candidate; it has only been packed locally. Normal builds have
-`GeneratePackageOnBuild=false`. Packaging requires an explicit `dotnet pack`.
+## Package inspection
+
+`EfCoreNexus.Framework.2.0.0.nupkg` is a stable package with the same package ID
+as 1.0.5. Normal builds still do not generate packages. The explicit Release pack
+and inspection commands are:
 
 ```sh
-dotnet pack EfCoreNexus.Framework/EfCoreNexus.Framework.csproj --no-restore -c Release -o artifacts/packages
-unzip -l artifacts/packages/EfCoreNexus.Framework.2.0.0-preview.1.nupkg
-unzip -p artifacts/packages/EfCoreNexus.Framework.2.0.0-preview.1.nupkg EfCoreNexus.Framework.nuspec
+dotnet pack EfCoreNexus.Framework/EfCoreNexus.Framework.csproj -c Release -o artifacts/packages
+unzip -l artifacts/packages/EfCoreNexus.Framework.2.0.0.nupkg
+unzip -p artifacts/packages/EfCoreNexus.Framework.2.0.0.nupkg EfCoreNexus.Framework.nuspec
+sha256sum artifacts/packages/EfCoreNexus.Framework.2.0.0.nupkg
 ```
 
-The inspected package is approximately **396 KiB**, with eight ZIP entries:
-`lib/net10.0/EfCoreNexus.Framework.dll`, root `README.md`, `license.txt` (MIT),
-`logo.png`, the nuspec and three NuGet infrastructure entries. Packaged README,
-license, icon and assembly were compared byte for byte with the build inputs.
-There are no demo/test assemblies, configuration/secrets, patches, historical
-documents, source files or build artifacts beyond the library DLL.
+The package contains eight ZIP entries: `lib/net10.0/EfCoreNexus.Framework.dll`,
+root `README.md`, MIT `license.txt`, `logo.png`, the nuspec and three NuGet
+infrastructure entries. README, license, icon and DLL match their inputs byte for
+byte. No demo/test assemblies, source, configuration, secrets or historical
+documents are included. The only direct dependency is
+`Microsoft.EntityFrameworkCore >= 10.0.13` for `net10.0`; a concrete database
+provider remains the consumer's choice.
 
-The only direct package dependency is `Microsoft.EntityFrameworkCore >= 10.0.13`
-for `net10.0`; there is no database provider, SqlClient, Testcontainers or legacy
-Dynamic LINQ dependency. A plain console consumer needs only the framework and
-its chosen EF provider: DI/logging dependencies arrive transitively through EF.
-Description, tags, breaking-change release notes, project/repository URLs,
-license, icon and README metadata were inspected in the generated nuspec.
-All 36 links between the current documentation pages had valid local paths and
-anchors. The five existing GitHub documentation targets also returned HTTP 200
-via their raw-content URLs. README documentation links use absolute `v2` GitHub
-URLs so NuGet rendering does not depend on unpacked documentation files.
+The inspected nuspec has stable version `2.0.0`, unchanged ID/authorship,
+stable release notes with breaking changes, README/icon/license entries,
+project/repository URLs and the packing commit's repository SHA. Assembly and
+file versions are `2.0.0.0`; informational version is `2.0.0+<source commit>`.
+No symbol package is produced. Package hashes, nuspec/entry inspection output
+and validation logs are local evidence under `artifacts/release-2.0.0/validation/`;
+these generated files are not committed.
 
-Assembly and file versions are `2.0.0.0`; informational version contains
-`2.0.0-preview.1` and the source commit. The SDK emits a portable PDB beside the
-Release DLL and GitHub SourceLink metadata without an added package/toolchain.
-The SourceLink mapping and nuspec repository commit were inspected after packing
-the committed source. The nupkg does not include symbols; no snupkg was created
-and source stepping through a symbol server was not tested.
+Package-facing documentation links and the project URL use the planned
+**`v2.0.0` tag**, rather than the moving `v2` branch. Local target paths and
+anchors are checked before release. The tag does not exist during preparation;
+these public URLs become reachable only after the separately authorized tag
+push below. Other documentation uses relative links so it stays within the
+selected checkout/tag. A live NuGet README rendering was not checked; no package
+was uploaded to the NuGet web portal.
 
-## Independent consumer, using the nupkg
+## Independent local-package consumer
 
-A new console application was created **outside the repository/solution**, at
-`/tmp/efcorenexus-issue23-consumer`. It has no ProjectReference or ASP.NET
-FrameworkReference. Its only PackageReferences are `EfCoreNexus.Framework
-2.0.0-preview.1` and `Microsoft.EntityFrameworkCore.Sqlite 10.0.13`.
-Installation started with an empty, isolated package cache; NuGet's installed
-`.nupkg.metadata` confirms EfCoreNexus came from the local artifact directory.
-Both the local source and nuget.org were configured, so transitive dependencies
-could restore without relying on the developer's existing cache.
+The final stable nupkg was installed into a new **net10.0 console application
+outside this repository and solution**, with an initially empty isolated package
+cache. It has no ProjectReference or ASP.NET FrameworkReference, only
+`EfCoreNexus.Framework 2.0.0` and `Microsoft.EntityFrameworkCore.Sqlite 10.0.13`.
+NuGet source mapping restricts EfCoreNexus to `LocalRelease`; nuget.org supplies
+other packages. Installed `.nupkg.metadata` confirms the local source, and the
+installed nupkg hash matches the inspected artifact.
 
-The commands below were executed in Bash; paths identify the local evidence,
-not checked-in infrastructure. `Program.cs` combined the README's C# examples
-with a ServiceCollection host, temporary SQLite schema and assertions.
+The exact temporary consumer location is recorded in
+`artifacts/release-2.0.0/validation/consumer-location.txt`. Its `Program.cs`
+combines the README setup/CRUD/custom-LINQ examples with a ServiceCollection
+host, SQLite in-memory database and assertions. Executed in that directory,
+with `NUGET_PACKAGES` pointing to its new sibling cache:
 
 ```sh
-dotnet new console -f net10.0 -n NexusConsumer -o /tmp/efcorenexus-issue23-consumer --no-restore
-dotnet new nugetconfig -o /tmp/efcorenexus-issue23-consumer
-cd /tmp/efcorenexus-issue23-consumer
-export NUGET_PACKAGES=/tmp/efcorenexus-issue23-packages
-dotnet nuget add source /home/thorsten/projects/EfCoreNexus/artifacts/packages --name EfCoreNexusPreview --configfile nuget.config
-dotnet add package EfCoreNexus.Framework --version 2.0.0-preview.1
+dotnet add package EfCoreNexus.Framework --version 2.0.0
 dotnet add package Microsoft.EntityFrameworkCore.Sqlite --version 10.0.13
 dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
 dotnet build --no-restore -c Release
@@ -73,78 +72,101 @@ dotnet run --no-build --no-restore -c Release
 dotnet list package --vulnerable --include-transitive
 ```
 
-Restore/build/run passed with zero build warnings/errors and no known vulnerable
-packages. Assertions verified concrete scoped provider DI, entity discovery
-without DbSet properties, the native context factory, generated keys, all six
-CRUD methods, persisted scalar edits/deletes, null reads, missing ID-delete
-no-op, materialized custom LINQ, direct native EF and runner commit/rollback.
-Verification reads used fresh contexts. The temporary database was deleted.
+Restore, Release build and run passed with zero build warnings/errors and no
+known vulnerable dependencies. Assertions verify stable assembly/source-commit
+metadata, scoped concrete provider DI, entity discovery without DbSet properties,
+the native factory, generated keys, all six CRUD methods, persisted scalar edits,
+null reads and missing ID-delete no-op, custom materialized LINQ, direct native
+EF, and two-provider commit/rollback. Database verification uses fresh contexts.
+The in-memory database is disposed when the consumer exits.
 
-A second temporary console consumer at `/tmp/efcorenexus-issue23-api-consumer`
-compiled and ran the API guide's setup with its documented SQLite substitution.
-It supplied the stated Revision property/concurrency mapping for the rename
-example. Audited restore, Release build and run passed: constructor/logger DI,
-native configuration scanning, both WithContextAsync forms, explicit original/new
-tokens, stale rename rejection and fresh entity deletion worked. Neither consumer
-requires a new permanent sample or test project in this repository.
+For developer-only installation from another checkout, first pack as above, add
+its absolute `artifacts/packages` path as a local NuGet source and leave nuget.org
+enabled for dependencies. Use a fresh `NUGET_PACKAGES` cache when validating a
+rebuilt package with the same version. Do not commit machine-specific sources.
+Public consumers use the [normal NuGet installation](../README.md#install).
 
-## Solution, SQL Server and sample checks
+## Quality gates and CI
 
-Executed from the repository root:
+Executed from the repository root, with audit vulnerability warnings treated as
+errors, and no warning suppression:
 
 ```sh
 dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
 dotnet build --no-restore -c Release
-dotnet test --no-build --no-restore -c Release --logger "trx;LogFileName=sqlite.trx" --results-directory /tmp/efcorenexus-issue23-results
+dotnet test --no-build --no-restore -c Release
 dotnet list package --vulnerable --include-transitive
 dotnet restore EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
 dotnet build EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj --no-restore -c Release
-dotnet test EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj --no-build --no-restore -c Release --logger "trx;LogFileName=sql-server.trx" --logger "console;verbosity=normal" --results-directory /tmp/efcorenexus-issue23-results
+dotnet test EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj --no-build --no-restore -c Release --logger "console;verbosity=normal"
 dotnet list EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj package --vulnerable --include-transitive
-dotnet tool restore
-dotnet ef dbcontext info --project EfCoreNexus.TestApp/EfCoreNexus.TestApp.Data --startup-project EfCoreNexus.TestApp/EfCoreNexus.TestApp --configuration Release --no-build -- --ConnectionStrings:Main "Data Source=/tmp/efcorenexus-issue23-sample.db"
-dotnet ef dbcontext script --project EfCoreNexus.TestApp/EfCoreNexus.TestApp.Data --startup-project EfCoreNexus.TestApp/EfCoreNexus.TestApp --configuration Release --no-build --output /tmp/efcorenexus-issue23-schema.sql
-dotnet run --no-build --no-restore -c Release --project EfCoreNexus.TestApp/EfCoreNexus.TestApp --launch-profile http -- --ConnectionStrings:Main "Data Source=/tmp/efcorenexus-issue23-sample.db"
-curl -fsS http://localhost:5031/ -o /tmp/efcorenexus-issue23-sample.html
 git diff --check
 ```
 
-Solution and SQL test project builds passed without warnings/errors. **133/133
-SQLite tests** and **7/7 SQL Server tests** passed, with zero failures/skips.
-SQL Server reported **2025 CU10, 17.0.5035.5** from the existing pinned image;
-the suite verified rowversion, CRUD and transaction commit/rollback. Container
-cleanup was checked. Both transitive dependency audits were clean; the SQL
-test-only patched `System.Security.Cryptography.Pkcs 9.0.21` pin is unchanged.
-No security warnings were suppressed.
+Solution and SQL Server project restore/build passed without warnings/errors.
+**133/133 SQLite tests and 7/7 SQL Server tests passed, zero failures/skips.**
+SQL Server used the existing pinned 2025 CU10 image. All three transitive package
+audits (solution, SQL Server tests, independent consumer) reported no known
+vulnerabilities. The existing test-only Pkcs servicing pin is unchanged.
 
-EF tool restore, context info and schema scripting passed. The sample returned
-HTTP 200, referenced Blazor assets and left both tables empty after prerendering.
-Its component/CRUD/concurrency behavior is also covered by the existing SQLite
-tests. Interactive browser scenarios and Production publish were not rerun for
-#23; their earlier evidence remains in [#12 validation](validation-12.md).
+Both existing CI jobs, `build` and `sql-server`, including their audited restores
+and audit-report steps, passed on the
+[PR #24 merge commit](https://github.com/thliborius/EfCoreNexus/actions/runs/40200608876).
+The release-preparation PR must also pass both jobs on its final head; inspect
+its checks and audit logs before merging. The workflow is unchanged.
 
-Both CI jobs already passed in [PR #22](https://github.com/thliborius/EfCoreNexus/actions/runs/40188489945)
-and on [merged v2](https://github.com/thliborius/EfCoreNexus/actions/runs/40188713643).
-The workflow is unchanged. See [SQL Server coverage and platform limits](sql-server-tests.md).
+Windows/macOS, trimming/AOT, retrying execution strategies and production
+migrations were not revalidated. Interactive sample/browser scenarios were not
+rerun for this metadata/documentation change; earlier evidence remains in
+[#12 validation](validation-12.md) and the [SQL Server coverage](sql-server-tests.md).
 
-## Before public publication
+## Manual release commands — after separate approval
 
-The candidate is locally installable and ready for prerelease review. Remaining
-release actions are separate decisions:
+**Recommendation:** approve stable 2.0.0 once this preparation PR is merged into
+`v2`, both CI jobs are green and the exact clean merge commit and rebuilt package
+pass the checks above, including the independent consumer. No further framework
+changes or release infrastructure are needed for this preparation.
 
-- Review and merge the preparation PR into `v2`, then rebuild/audit/retest the
-  exact clean commit selected for publication. Confirm both PR CI jobs pass.
-- Confirm the public version and release notes; verify that preview.1 is still
-  available. Replace local-only installation/status wording when publishing.
-- Check the final README in NuGet's rendering and verify its absolute GitHub
-  links against the merged `v2` documents. Paths/anchors were checked locally;
-  this does not claim a live nuget.org preview. The new readiness page becomes
-  available at its `v2` URL after merge. Decide whether symbols are wanted.
-- Authorize and perform publication separately. No package push, release, tag,
-  deployment or merge was performed here.
+The commands below are a manual handoff, **not actions performed here**. They use
+Bash from the repository root. First select the merged commit and require a clean
+checkout; if the cleanliness check fails, stop and preserve the local changes.
 
-Windows/macOS, WebAssembly database access, trimming/AOT, retrying execution
-strategies and production database migrations were not validated. The sample
-uses disposable EnsureCreated data. Query filters do not authorize writes;
-server-side permission checks, allowed fields and tenant isolation remain the
-consumer's responsibility, as documented in the [API security contracts](native-setup.md#security-boundaries-filters-authorization-and-full-edits).
+```sh
+set -euo pipefail
+git fetch origin --prune
+git switch --detach origin/v2
+test -z "$(git status --porcelain)"
+NEXUS_RELEASE_COMMIT="$(git rev-parse HEAD)"
+NEXUS_CI_RUN="$(gh run list --repo thliborius/EfCoreNexus --workflow dotnet.yml --branch v2 --commit "$NEXUS_RELEASE_COMMIT" --limit 1 --json databaseId --jq '.[0].databaseId')"
+test -n "$NEXUS_CI_RUN" && test "$NEXUS_CI_RUN" != null
+gh run watch "$NEXUS_CI_RUN" --repo thliborius/EfCoreNexus --exit-status
+```
+
+Run all quality-gate commands above, then pack/inspect again and rerun the
+independent local-package consumer with a fresh cache. Do not reuse this branch's
+artifact after a merge: its repository SHA must match `NEXUS_RELEASE_COMMIT`.
+Confirm `2.0.0` is still absent from the
+[NuGet version index](https://api.nuget.org/v3-flatcontainer/efcorenexus.framework/index.json)
+and `v2.0.0` is absent from remote tags before executing the authorized release:
+
+```sh
+git ls-remote --tags origin refs/tags/v2.0.0
+curl -fsS https://api.nuget.org/v3-flatcontainer/efcorenexus.framework/index.json
+git tag -a v2.0.0 "$NEXUS_RELEASE_COMMIT" -m "EfCoreNexus.Framework 2.0.0"
+git push origin refs/tags/v2.0.0
+curl -fsS https://raw.githubusercontent.com/thliborius/EfCoreNexus/v2.0.0/docs/release-notes-2.0.0.md
+curl -fsS https://raw.githubusercontent.com/thliborius/EfCoreNexus/v2.0.0/docs/migration-v2.md
+dotnet nuget push artifacts/packages/EfCoreNexus.Framework.2.0.0.nupkg --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+```
+
+Supply `NUGET_API_KEY` through the release operator's secret environment; never
+commit or print it. Stop on any failed command. Verify all packaged README links
+against the tag before the NuGet push; then verify public installation in a fresh
+consumer after NuGet indexing. The
+[official push reference](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-nuget-push)
+describes the publication command. A GitHub release, if desired, can use the
+[release notes](release-notes-2.0.0.md) and the same tag after separate approval.
+
+**Preparation status:** no merge, tag, package push, GitHub release or deployment
+was performed. At preparation time, nuget.org lists versions through 1.0.5 only;
+2.0.0 remains a locally validated release artifact until publication is authorized.
