@@ -65,4 +65,5 @@ removing them would need a separate API decision and real consumer evidence.
 - Browser-side EF/database access is unsupported. WebAssembly needs a server API;
   this sample is Interactive Server only.
 
-See [validation evidence](validation-12.md) for tests and platform limits.
+See [release-readiness evidence](release-readiness.md) for current package/tests
+and platform limits, and [earlier sample validation](validation-12.md).
