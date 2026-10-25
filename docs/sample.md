@@ -66,12 +66,13 @@ migration is provided or implied.
 To run a local Production build, publish first (no deployment is needed):
 
 ```sh
-dotnet publish EfCoreNexus.TestApp/EfCoreNexus.TestApp -p:GeneratePackageOnBuild=false -o artifacts/sample
+dotnet publish EfCoreNexus.TestApp/EfCoreNexus.TestApp -o artifacts/sample
 cd artifacts/sample
 dotnet EfCoreNexus.TestApp.dll --urls http://localhost:5031
 ```
 
 Production uses the published assets; running an unpublished build with the
 Development profile disabled is not the documented startup path. Windows/macOS
-CLI execution and SQL Server behavior have not been tested. See
-[actual validation](validation-12.md).
+CLI execution remains untested. The sample uses SQLite; SQL Server behavior is
+covered separately by the [container suite](sql-server-tests.md). See
+[release-readiness validation](release-readiness.md) and [earlier sample validation](validation-12.md).

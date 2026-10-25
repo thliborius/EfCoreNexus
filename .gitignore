@@ -1,6 +1,7 @@
 # .NET build artifacts (all projects)
 [Bb]in/
 [Oo]bj/
+artifacts/
 
 # Local sample SQLite databases
 *.db

@@ -1,5 +1,8 @@
 # Issue #12 validation
 
+Historical evidence for #12. See [release readiness (#23)](release-readiness.md)
+for the current package version, test counts and SQL Server coverage.
+
 Baseline: `origin/v2` at `61e040a`. Executed on Linux, .NET SDK 10.0.113,
 runtime 10.0.13, EF Core / local dotnet-ef 10.0.13, SQLite.
 

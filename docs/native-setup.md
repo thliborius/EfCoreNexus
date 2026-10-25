@@ -8,13 +8,24 @@ and model building remain available.
 This page describes implemented setup, ordinary async CRUD (#10), custom
 operations, and optional shared-context transactions (#11). The design and
 trade-offs remain in [architecture-v2.md](architecture-v2.md).
+Install the framework and a concrete EF Core 10 database provider using the
+[local preview instructions](../README.md#install-the-local-preview).
 
 ## Native setup
 
-The native path uses `EfCoreNexus.Framework.Helper` and
-`EfCoreNexus.Framework.Provider` alongside normal EF/DI namespaces:
+The following SQL Server example requires `Microsoft.EntityFrameworkCore.SqlServer`
+10.0.13; use `Microsoft.EntityFrameworkCore.Sqlite` and `UseSqlite` for SQLite.
+The application supplies `builder` and its configured connection string:
 
 ```csharp
+using EfCoreNexus.Framework.Entities;
+using EfCoreNexus.Framework.Helper;
+using EfCoreNexus.Framework.Provider;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
 builder.Services.AddDbContextFactory<MainContext>(o => o.UseSqlServer(connection));
 builder.Services.AddNexusProviders<MainContext>(typeof(CustomerProvider).Assembly);
 // Consumers inject CustomerProvider directly.
@@ -383,8 +394,9 @@ with fresh contexts and mutable entities per attempt, replay-safe callbacks and
 application-specific handling of uncertain commits; this has not been tested.
 See [EF transaction limitations](https://learn.microsoft.com/en-us/ef/core/saving/transactions)
 and [execution strategies and commit uncertainty](https://learn.microsoft.com/en-us/ef/core/miscellaneous/connection-resiliency).
-SQL Server rowversion, SQL Server transaction behavior and Windows execution
-remain unverified; SQLite tests establish only the covered SQLite behavior.
+SQL Server rowversion and commit/rollback behavior are verified by the separate
+[SQL Server integration suite](sql-server-tests.md). Windows/macOS execution and
+retrying strategies remain unverified; provider evidence covers only the tested models.
 
 ## Context ownership
 
@@ -402,5 +414,5 @@ the six ordinary CRUD methods, four borrowed write overloads and two ownership
 helpers. It neither depends on nor participates in `TransactionService`.
 
 Legacy components were removed in #12. See [migration from v1](migration-v2.md) and
-[current validation](validation-12.md); earlier ticket evidence is retained in the
+[release-readiness validation](release-readiness.md); earlier ticket evidence is retained in the
 [historical architecture record](history/architecture-proposal.md).

@@ -129,75 +129,20 @@ or all EF model shapes. No framework implementation or public API change is need
 
 ## Separate GitHub Actions job
 
-The available GitHub OAuth credential has `repo` but **no `workflow` scope**
-(`gh auth status`). GitHub requires that scope to add/update workflow files; see
-[GitHub's scope documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes).
-Consequently this PR leaves `.github/workflows/dotnet.yml` unchanged. The SQL
-Server job below has **not run in GitHub Actions**. During the PR #22 CI follow-up,
-an actual push of this addition to the existing PR branch was rejected by GitHub:
+The `sql-server` job is integrated in
+[`.github/workflows/dotnet.yml`](../.github/workflows/dotnet.yml), alongside the
+normal solution/SQLite `build` job. Both run for pull requests and pushes to
+`v2` (and `main`). The SQL job uses Ubuntu 24.04, Docker and .NET 10, with a
+15-minute timeout covering image download and cold startup. It restores with
+transitive vulnerability warnings treated as errors, builds, runs all seven
+SQL Server cases and reports the dependency audit. Testcontainers owns startup,
+readiness and cleanup; no SQL Server secrets or service container are required.
 
-> refusing to allow an OAuth App to create or update workflow `.github/workflows/dotnet.yml` without `workflow` scope
-
-The ready-to-apply [workflow patch](patches/sql-server-ci.patch) adds this separate
-job while preserving the existing regular CI job byte for byte. Its 15-minute
-timeout allows for image download and the fixture's five-minute cold-start budget.
-There are no fixed credentials, secrets or additional actions.
-
-Use a clean checkout and your own GitHub identity with permission to update
-workflow files (OAuth/classic PAT authentication needs the `workflow` scope).
-Run these commands from the repository root, stopping if any command fails:
-
-```sh
-git fetch origin
-git switch feature/issue-21-sql-server-integration
-git pull --ff-only
-git apply --check docs/patches/sql-server-ci.patch
-git apply docs/patches/sql-server-ci.patch
-git diff --check
-git diff -- .github/workflows/dotnet.yml
-git add .github/workflows/dotnet.yml
-git commit -m "ci: run SQL Server integration tests in a separate job"
-git push origin HEAD
-gh pr checks 22 --watch
-```
-
-The push updates **PR #22 against `v2`** and triggers the existing pull-request
-workflow with both jobs. Check the `sql-server` job log for seven passed tests
-and zero skips; Docker/startup errors must fail it. No CI success is claimed for
-the unapplied patch. The patch appends this job under the existing `jobs:`:
-
-```yaml
-  sql-server:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-dotnet@v6.0.0
-        with:
-          dotnet-version: 10.0.x
-      - name: Check Docker
-        run: docker info
-      - name: Restore and audit
-        run: dotnet restore EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
-      - name: Build
-        run: dotnet build EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj --no-restore
-      - name: Test SQL Server
-        run: dotnet test EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj --no-build --logger "console;verbosity=normal"
-      - name: Report dependency audit
-        run: dotnet list EfCoreNexus.SqlServer.Tests/EfCoreNexus.SqlServer.Tests.csproj package --vulnerable --include-transitive
-```
-
-The existing PR job continues to validate the normal solution/SQLite tests.
-No service container, SQL Server secrets or extra orchestration are required;
-Testcontainers owns startup, readiness and cleanup inside the separate job.
-
-Follow-up validation: solution restore/build and **133/133 SQLite tests** passed
-again without warnings or skips. The SQL test project's restore/build and both
-transitive NuGet audits passed. An isolated copy of the project restored without
-the explicit Pkcs reference still resolved vulnerable `9.0.11`, failing with
-`NU1902`/`NU1903`; therefore the existing `9.0.21` reference is unchanged. SQL test
-sources and framework code are unchanged. The workflow YAML parsed successfully,
-the regular job was verified unchanged, and `git apply --check` confirmed the
-patch applies cleanly. This follow-up did not rerun the SQL container tests.
+Both jobs **passed in PR #22 CI** on 2026-10-25:
+[PR run 40188489945](https://github.com/thliborius/EfCoreNexus/actions/runs/40188489945).
+They also passed on merged `v2` commit `5a3c466`:
+[run 40188713643](https://github.com/thliborius/EfCoreNexus/actions/runs/40188713643).
+These are separate from the local Linux runs recorded above; Windows/macOS
+execution remains untested. The earlier workflow-permission blocker was resolved
+before merge, so the temporary patch and application instructions are removed.
+See [#23 validation](release-readiness.md) for the latest local package/test checks.

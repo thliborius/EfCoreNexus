@@ -1,7 +1,9 @@
 # Migrating from v1.0.5 to v2
 
 v2 is source-breaking and requires .NET 10 / EF Core 10. No compatibility facade
-is retained. Package publication/version selection is separate from this migration.
+is retained. The package ID remains `EfCoreNexus.Framework`; `2.0.0-preview.1`
+is a local, unpublished candidate. Use the [local package instructions](../README.md#install-the-local-preview)
+to evaluate it before changing an existing application.
 
 | v1 | v2 replacement |
 | --- | --- |
@@ -30,6 +32,12 @@ uses native EF in a specialized operation. A no-change update is not a version a
 Borrowed writes save the entire supplied tracker immediately. Failed transactions
 do not undo generated IDs or in-memory state; discard failed workflow entities.
 See [full contracts](native-setup.md) before migrating overrides.
+
+Review server-side authorization, tenant isolation and allowed update fields.
+Query filters do not authorize writes: entity delete performs no lookup, and
+borrowed writes can reuse tracked targets without rechecking filters. A generic
+full edit also copies writable tenant/privilege fields. Concurrency tokens are
+not access checks. See the [security boundaries](native-setup.md#security-boundaries-filters-authorization-and-full-edits).
 
 The demo switches from SQL Server to SQLite and has a new Memo table. It is a
 fresh disposable demo schema, not an automatic migration of an existing SQL Server

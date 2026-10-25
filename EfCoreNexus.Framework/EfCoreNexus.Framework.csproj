@@ -5,35 +5,34 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Title>EfCoreNexus</Title>
+    <PackageId>EfCoreNexus.Framework</PackageId>
     <Authors>Thorsten Liborius</Authors>
-    <Description>Integrate the entity framework core into your blazor app with ease and less code.
-Tired of copy &amp; pasting a lots of classes when creating a new table and connecting it to your blazor app? EfCoreNexus helps you integrating the entity framework core into your blazor app.
-After it had been set up, it is really easy to add new table to your app. Now you only have to add to classes: the entity class and a provider class, which handle the CRUD operations. Simple operations are covered by the base class while you can add the specific ones.
-Additionally you can add a configuration for each entity.</Description>
+    <Description>Less boilerplate. More Entity Framework. Small, optional EF Core helpers for Blazor: typed async CRUD, per-operation DbContext ownership, explicit assembly discovery and optional multi-provider transactions. Requires .NET 10 / EF Core 10; native EF APIs remain available.</Description>
     <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/thliborius/EfCoreNexus/</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/thliborius/EfCoreNexus/tree/v2</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageLicenseFile>license.txt</PackageLicenseFile>
-    <Version>1.0.5</Version>
+    <Version>2.0.0-preview.1</Version>
     <Copyright>Thorsten Liborius</Copyright>
-    <PackageTags>Entity Framework Core;Blazor</PackageTags>
-    <PackageReleaseNotes>Documentation update</PackageReleaseNotes>	
+    <PackageTags>EFCore;EntityFrameworkCore;Blazor;CRUD</PackageTags>
+    <PackageReleaseNotes>First v2 preview candidate for local validation; not published. Breaking changes from 1.0.5: .NET 10 / EF Core 10, native DbContextFactory setup, concrete provider DI, async CRUD and explicit transaction contexts replace the legacy service/factory hierarchy. Review migration and security contracts: https://github.com/thliborius/EfCoreNexus/blob/v2/docs/migration-v2.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\license.txt">
+    <None Include="../license.txt">
       <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
+      <PackagePath>/</PackagePath>
     </None>
-    <None Include="..\logo.png">
+    <None Include="../logo.png">
       <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
+      <PackagePath>/</PackagePath>
     </None>
-    <None Include="..\README.md">
+    <None Include="../README.md">
       <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
+      <PackagePath>/</PackagePath>
     </None>
   </ItemGroup>
 
