@@ -1,8 +1,82 @@
 # EfCoreNexus
 
-**Less boilerplate. More Entity Framework.** A small optional helper for EF Core
-in Blazor: typed async CRUD, safe per-operation contexts and opt-in discovery.
-Native EF stays available. No service locator, mandatory repository or unit of work.
+**Less boilerplate. More Entity Framework.**
+
+EfCoreNexus is a small, optional helper for Blazor applications that organize
+Entity Framework Core access into typed providers. It eliminates repetitive
+CRUD implementations, per-provider registrations and DbContext lifecycle code
+without replacing native EF Core.
+
+## Why EfCoreNexus?
+
+### 1. Write a provider once, not the same CRUD methods six times
+
+If you use a provider per entity, the usual handwritten code can look like this:
+
+```csharp
+public sealed class CustomerProvider(IDbContextFactory<AppDb> factory)
+{
+    public async Task<List<Customer>> GetAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Set<Customer>().AsNoTracking().ToListAsync(ct);
+    }
+
+    public async Task CreateAsync(Customer customer, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.Set<Customer>().Add(customer);
+        await db.SaveChangesAsync(ct);
+    }
+
+    // And again for GetByIdAsync, UpdateAsync and both DeleteAsync overloads...
+}
+```
+
+With EfCoreNexus, the provider is just:
+
+```csharp
+public sealed class CustomerProvider(IDbContextFactory<AppDb> factory)
+    : ProviderBase<Customer, int, AppDb>(factory);
+```
+
+The inherited provider already implements `GetAllAsync`, `GetByIdAsync`,
+`CreateAsync`, `UpdateAsync` and both `DeleteAsync` overloads.
+Every call supports cancellation and owns a fresh, asynchronously disposed
+DbContext. For example, creating a customer becomes one line:
+
+```csharp
+await customers.CreateAsync(customer);
+```
+
+This saves the repeated implementations for each entity, **not a fixed
+percentage of your application's total code**.
+
+### 2. Fewer types to declare and less setup per entity
+
+After the one-time [setup](#setup-once), adding a conventionally mapped entity
+and provider can be as small as:
+
+```csharp
+public sealed class Order : IEntity
+{
+    public int Id { get; set; }
+    public string Description { get; set; } = "";
+}
+
+public sealed class OrderProvider(IDbContextFactory<AppDb> factory)
+    : ProviderBase<Order, int, AppDb>(factory);
+```
+
+No separate `IOrderProvider` interface, repository implementation, per-provider
+`AddScoped<OrderProvider>()`, `DbSet<Order>` property or mandatory mapping
+configuration class is needed. Assembly discovery picks up eligible entities
+and concrete providers from the assemblies you explicitly configure once.
+
+**EF Core itself does not require a repository or provider layer.** If direct
+DbContext access is simpler for your application, use it. EfCoreNexus is most
+useful when you *want* typed providers but not all their boilerplate.
+Custom LINQ, complex operations and native EF Core APIs remain available.
 
 **2.0.0** targets **.NET 10 / EF Core 10** and introduces breaking changes from
 `EfCoreNexus.Framework` **1.0.5**. Review the
