@@ -9,7 +9,7 @@ This page describes implemented setup, ordinary async CRUD (#10), custom
 operations, and optional shared-context transactions (#11). The design and
 trade-offs remain in [architecture-v2.md](architecture-v2.md).
 Install the framework and a concrete EF Core 10 database provider using the
-[local preview instructions](../README.md#install-the-local-preview).
+[NuGet installation instructions](../README.md#install).
 
 ## Native setup
 

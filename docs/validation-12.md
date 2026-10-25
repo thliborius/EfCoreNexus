@@ -1,6 +1,6 @@
 # Issue #12 validation
 
-Historical evidence for #12. See [release readiness (#23)](release-readiness.md)
+Historical evidence for #12. See [stable release readiness](release-readiness.md)
 for the current package version, test counts and SQL Server coverage.
 
 Baseline: `origin/v2` at `61e040a`. Executed on Linux, .NET SDK 10.0.113,

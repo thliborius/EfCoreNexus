@@ -145,4 +145,4 @@ They also passed on merged `v2` commit `5a3c466`:
 These are separate from the local Linux runs recorded above; Windows/macOS
 execution remains untested. The earlier workflow-permission blocker was resolved
 before merge, so the temporary patch and application instructions are removed.
-See [#23 validation](release-readiness.md) for the latest local package/test checks.
+See [stable release validation](release-readiness.md) for the latest local package/test checks.
