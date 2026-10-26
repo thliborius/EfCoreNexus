@@ -130,6 +130,9 @@ root configurations after discovery, then final context overrides. Configuration
 classes can introduce entities without the marker. Native configuration scanning
 has no defined application order; use explicit `ApplyConfiguration` for ordering
 or constructor dependencies. No configuration services need registering in DI.
+Pre-convention `ComplexProperties<T>()` classifications are respected, including
+when the value type sorts before its owner. EF's convention builder also declines
+other types that are already classified as non-entities by pre-conventions.
 See [native EF model configuration](https://learn.microsoft.com/en-us/ef/core/modeling/).
 
 Arguments are validated; reflection/type-load failures propagate rather than
@@ -345,11 +348,12 @@ and reuses tracked identity; detached entity delete searches the local tracker
 without a database existence lookup. Neither attaches a replacement instance for
 an already tracked key. Tracked inputs retain EF's existing original concurrency
 values, even if current token values changed. Detached inputs supply expected
-tokens to the tracked target, including an already pending scalar update. A
+tokens to the tracked target, including already pending scalar or complex changes. A
 no-change detached edit of an unchanged row still asserts no version. Added or
 deleted tracked update inputs/targets are rejected instead of becoming upserts.
-Entity delete also rejects an `Added` target with `InvalidOperationException`
+Both ID and entity delete reject an `Added` target with `InvalidOperationException`
 before changing its state or saving, including detached input matching its key.
+Update tracks a row found under global no-tracking settings without changing those settings.
 
 Tracked entities receive generated keys/tokens after each successful save and can
 be edited again within the same context. Detached edits are not refreshed; reload

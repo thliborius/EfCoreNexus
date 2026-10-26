@@ -110,10 +110,13 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         var target = db.Entry(row);
         if (target.State is EntityState.Added or EntityState.Deleted)
             throw new InvalidOperationException($"{typeof(TEntity).Name}: added/deleted entities require a specialized operation.");
+        if (target.State == EntityState.Detached)
+            target.State = EntityState.Unchanged;
 
         if (source.State == EntityState.Detached)
         {
-            var changed = target.Properties.Any(p => p.IsModified);
+            target.DetectChanges();
+            var changed = target.State == EntityState.Modified;
             foreach (var property in target.Metadata.GetProperties())
             {
                 if (property.IsKey() || property.IsShadowProperty() || property.IsIndexerProperty()
@@ -138,6 +141,7 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
     /// <summary>
     /// Deletes the current row by native FindAsync, including a tracked instance. A missing row is a
     /// no-op for this entity, but still saves the entire caller-owned tracker immediately.
+    /// An Added target is rejected before changing its state or saving.
     /// Never owns the context or transaction. Ordinary calls use independent contexts.
     /// </summary>
     public virtual async Task DeleteAsync(TContext db, TId id, CancellationToken ct = default)
@@ -146,7 +150,12 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         ArgumentNullException.ThrowIfNull(id);
         GetKey(db);
         var row = await db.Set<TEntity>().FindAsync([id], ct).ConfigureAwait(false);
-        if (row is not null) db.Remove(row);
+        if (row is not null)
+        {
+            if (db.Entry(row).State == EntityState.Added)
+                throw new InvalidOperationException($"{typeof(TEntity).Name}: ID delete cannot delete an Added entity before it has been saved.");
+            db.Remove(row);
+        }
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
