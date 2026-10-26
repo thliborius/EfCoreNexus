@@ -187,6 +187,8 @@ not `Save`. Native backing-field mappings and value converters work. Navigation,
 owned and complex graphs are not copied. Omitted/default scalar values are still
 supplied values: this is a full edit, so use a specialized provider for partial or
 allowed-field updates. Unchanged edits issue no update and do not assert a version.
+Detached input and the loaded row must have the same mapped EF entity type;
+different mapped subtypes are rejected before values are copied or changes saved.
 
 Keep **every original CLR concurrency token unchanged** on the detached entity
 shown to the user. Update transfers these values to EF's `OriginalValue` on the
@@ -196,6 +198,10 @@ writes token columns. Shadow/indexer/complex tokens and application-managed toke
 renewal are explicitly rejected with `InvalidOperationException`. Entity delete
 accepts application-managed CLR tokens because it needs no renewal; it rejects
 shadow/indexer/complex tokens as well. ID delete uses the currently loaded tokens.
+Entity delete through a base-type input is outside this guarantee when derived
+types have their own concurrency tokens: the base input does not contain those
+tokens. Use a correctly typed concrete provider or a native EF operation with
+explicit expected tokens.
 
 A missing update at lookup is distinct from a stale edit or deletion between
 lookup and save, which raises EF's `DbUpdateConcurrencyException`. The application
@@ -354,6 +360,14 @@ deleted tracked update inputs/targets are rejected instead of becoming upserts.
 Both ID and entity delete reject an `Added` target with `InvalidOperationException`
 before changing its state or saving, including detached input matching its key.
 Update tracks a row found under global no-tracking settings without changing those settings.
+ID delete temporarily enables tracking for its `FindAsync` lookup and restores the
+setting, preserving owned shadow keys while retaining tracked identity and filters.
+
+For a borrowed update with a detached snapshot, token transfer does not guarantee
+protection for arbitrary pending owned-entity changes when the owner itself is
+unchanged, even though the call saves the entire tracker. For owned graph edits
+requiring optimistic concurrency, use a specialized native EF operation with
+explicit token handling, or validate and restrict the workflow.
 
 Tracked entities receive generated keys/tokens after each successful save and can
 be edited again within the same context. Detached edits are not refreshed; reload

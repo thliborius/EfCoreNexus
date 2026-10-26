@@ -110,6 +110,8 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         var target = db.Entry(row);
         if (target.State is EntityState.Added or EntityState.Deleted)
             throw new InvalidOperationException($"{typeof(TEntity).Name}: added/deleted entities require a specialized operation.");
+        if (source.State == EntityState.Detached && source.Metadata != target.Metadata)
+            throw new InvalidOperationException($"Update requires the same mapped entity type; input is '{source.Metadata.Name}' and target is '{target.Metadata.Name}'.");
         if (target.State == EntityState.Detached)
             target.State = EntityState.Unchanged;
 
@@ -149,7 +151,19 @@ public abstract class ProviderBase<TEntity, TId, TContext> : IProviderCrud<TEnti
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(id);
         GetKey(db);
-        var row = await db.Set<TEntity>().FindAsync([id], ct).ConfigureAwait(false);
+        // FindAsync preserves tracked identity and query filters. Its database query uses
+        // the context default, so temporarily enable tracking to retain owned shadow keys.
+        var tracking = db.ChangeTracker.QueryTrackingBehavior;
+        TEntity? row;
+        try
+        {
+            db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.TrackAll;
+            row = await db.Set<TEntity>().FindAsync([id], ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            db.ChangeTracker.QueryTrackingBehavior = tracking;
+        }
         if (row is not null)
         {
             if (db.Entry(row).State == EntityState.Added)
