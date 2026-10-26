@@ -44,7 +44,9 @@ public static class NexusModelBuilderExtensions
                 throw new InvalidOperationException(
                     $"Entity candidate '{type.FullName}' is already a shared-type entity. Configure it explicitly instead of discovering a root.");
 
-            model.Entity(type);
+            // Let EF's convention builder honor pre-convention type classification first.
+            if (((IConventionModel)model.Model).Builder.Entity(type) is not null)
+                model.Entity(type);
         }
 
         return model;
