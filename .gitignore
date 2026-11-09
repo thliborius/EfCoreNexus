@@ -8,3 +8,6 @@ artifacts/
 *.db-shm
 *.db-wal
 .playwright-mcp/
+
+# Claude Code local settings (potentially sensitive command arguments)
+**/.claude/settings.local.json
